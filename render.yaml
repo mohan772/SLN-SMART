@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: SLN-backend
+    env: node
+    branch: main
+    plan: free
+    autoDeploy: true
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && node server.js
+    rootDir: /
+    envVars:
+      - key: MONGO_URI
+      - key: JWT_SECRET
+      - key: NODE_ENV
+      - key: PORT
+      - key: RAZORPAY_KEY_ID
+      - key: RAZORPAY_KEY_SECRET
+      - key: MSG91_AUTH_KEY
+
+  - type: static
+    name: SLN-frontend
+    branch: main
+    plan: free
+    rootDir: frontend
+    staticPublishPath: frontend/dist
+    buildCommand: cd frontend && npm install && npm run build
+    envVars:
+      - key: VITE_API_BASE_URL

@@ -10,6 +10,7 @@ yarn.lock
 # Env
 .env
 .env.*
+!.env.example
 
 # Logs
 logs

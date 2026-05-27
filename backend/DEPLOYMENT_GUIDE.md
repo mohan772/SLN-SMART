@@ -76,7 +76,7 @@ FRONTEND_URL=https://your-frontend-url.com
 
 ---
 
-## Phase 2: Frontend Deployment on Vercel
+## Phase 2: Frontend Deployment
 
 ### 1. Prepare Your Frontend
 
@@ -103,7 +103,32 @@ VITE_RAZORPAY_KEY_ID=your_razorpay_public_key
 VITE_APP_NAME=SLN Smart Vegetable Shop
 ```
 
-### 3. Deploy on Vercel
+### 3. Deploy on Render (Recommended)
+
+1. Go to render.com and sign in
+2. Click "Create +" → "Static Site"
+3. Select your GitHub repository
+4. Fill in details:
+   - **Name**: `sln-smart-frontend`
+   - **Branch**: `main`
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+5. Add environment variables:
+
+```
+VITE_API_URL=https://sln-grocery-api.onrender.com/api
+VITE_RAZORPAY_KEY_ID=your_razorpay_public_key
+VITE_APP_NAME=SLN Smart Vegetable Shop
+```
+
+6. Deploy
+
+Render will build and publish the static site.
+
+### 4. Alternative: Deploy on Vercel
+
+If you prefer Vercel instead:
 
 #### Option A: Using Vercel CLI
 
@@ -123,7 +148,7 @@ vercel --prod
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
 
-### 4. Add Environment Variables on Vercel
+### 5. Add Environment Variables on Vercel
 
 In Project Settings → Environment Variables:
 
@@ -133,10 +158,10 @@ VITE_RAZORPAY_KEY_ID=your_razorpay_public_key
 VITE_APP_NAME=SLN Smart Vegetable Shop
 ```
 
-### 5. Deploy
+### 6. Deploy
 
 Push to GitHub and Vercel will automatically deploy.
-Your site will be live at: `https://sln-grocery.vercel.app` (or your custom domain)
+Your site will be live at your Vercel URL or custom domain.
 
 ---
 

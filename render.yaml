@@ -22,7 +22,7 @@ services:
     branch: main
     plan: free
     rootDir: frontend
-    staticPublishPath: frontend/dist
-    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: dist
+    buildCommand: npm install && npm run build
     envVars:
-      - key: VITE_API_BASE_URL
+      - key: VITE_API_URL

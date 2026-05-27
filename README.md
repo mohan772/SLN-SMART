@@ -313,17 +313,16 @@ npm run test
 
 ## 🚀 Deployment
 
-### Quick Deploy to Vercel (Frontend)
-```bash
-cd frontend
-npm i -g vercel
-vercel --prod
-```
-
 ### Quick Deploy to Render (Backend)
 1. Push code to GitHub
 2. Connect GitHub to Render
 3. Add environment variables
+4. Deploy
+
+### Quick Deploy to Render (Frontend)
+1. Push code to GitHub
+2. Connect GitHub to Render and create a static site
+3. Set `VITE_API_URL` to your backend API URL
 4. Deploy
 
 See [DEPLOYMENT_GUIDE.md](./backend/DEPLOYMENT_GUIDE.md) for detailed instructions.

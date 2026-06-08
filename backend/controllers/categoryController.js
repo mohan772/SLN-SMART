@@ -1,11 +1,15 @@
-const Category = require('../models/Category');
+const supabase = require('../config/supabase');
 
 // @desc    Get all categories
 // @route   GET /api/categories
 // @access  Public
 exports.getCategories = async (req, res, next) => {
   try {
-    const categories = await Category.find();
+    const { data: categories, error } = await supabase
+      .from('categories')
+      .select('*');
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -21,9 +25,13 @@ exports.getCategories = async (req, res, next) => {
 // @access  Public
 exports.getCategory = async (req, res, next) => {
   try {
-    const category = await Category.findById(req.params.id);
+    const { data: category, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!category) {
+    if (error || !category) {
       return res.status(404).json({ message: 'Category not found' });
     }
 
@@ -46,7 +54,13 @@ exports.createCategory = async (req, res, next) => {
       categoryData.image = `/uploads/${req.file.filename}`;
     }
 
-    const category = await Category.create(categoryData);
+    const { data: category, error } = await supabase
+      .from('categories')
+      .insert(categoryData)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     res.status(201).json({
       success: true,
@@ -62,21 +76,21 @@ exports.createCategory = async (req, res, next) => {
 // @access  Private/Admin
 exports.updateCategory = async (req, res, next) => {
   try {
-    let category = await Category.findById(req.params.id);
-
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-
     let categoryData = { ...req.body };
     if (req.file) {
       categoryData.image = `/uploads/${req.file.filename}`;
     }
 
-    category = await Category.findByIdAndUpdate(req.params.id, categoryData, {
-      new: true,
-      runValidators: true,
-    });
+    const { data: category, error } = await supabase
+      .from('categories')
+      .update(categoryData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error || !category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
 
     res.status(200).json({
       success: true,
@@ -92,13 +106,12 @@ exports.updateCategory = async (req, res, next) => {
 // @access  Private/Admin
 exports.deleteCategory = async (req, res, next) => {
   try {
-    const category = await Category.findById(req.params.id);
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', req.params.id);
 
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-
-    await category.deleteOne();
+    if (error) throw error;
 
     res.status(200).json({
       success: true,

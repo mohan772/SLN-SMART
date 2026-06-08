@@ -1,15 +1,20 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useCart } from '../context/CartContext'
 import { useToast } from '../context/ToastContext'
 import { formatINR } from '../utils/currency'
 
 const Cart = () => {
-  const { cartItems, cartTotal, deliveryFee, taxAmount, estimatedTotal, updateCartItem, removeFromCart, clearCart } = useAuth()
+  const { cart, updateQuantity, removeFromCart, clearCart } = useCart()
+  const cartItems = cart?.items || []
+  const cartSubtotal = cartItems.reduce((acc, item) => acc + ((item.product?.discountPrice || item.product?.price || 0) * item.quantity), 0)
+  const deliveryFee = cartSubtotal > 500 ? 0 : 50
+  const taxAmount = cartSubtotal * 0.05
+  const estimatedTotal = cartSubtotal + deliveryFee + taxAmount
   const [coupon, setCoupon] = useState('')
   const [discount, setDiscount] = useState(0)
   const [message, setMessage] = useState('')
-  const toast = useToast()
+  const { createToast } = useToast()
 
   if (!cartItems.length) {
     return (
@@ -27,11 +32,11 @@ const Cart = () => {
     if (coupon.trim().toUpperCase() === 'FRESH20') {
       setDiscount(20)
       setMessage('Coupon applied successfully!')
-      toast.createToast('Coupon applied: $20 off', 'success')
+      createToast('Coupon applied: ₹20 off', 'success')
       return
     }
     setMessage('Coupon code not valid for this order.')
-    toast.createToast('Invalid coupon code', 'error')
+    createToast('Invalid coupon code', 'error')
   }
 
   return (
@@ -43,32 +48,37 @@ const Cart = () => {
 
       <div className="grid gap-8 xl:grid-cols-[2.2fr_1fr]">
         <div className="space-y-5">
-          {cartItems.map((item) => (
-            <article key={item._id} className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                  <img src={item.image || 'https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=600&q=60'} alt={item.name} className="h-28 w-28 rounded-[1.75rem] object-cover" />
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">{item.name}</h3>
-                  <p className="mt-2 text-sm text-slate-500">Category: {item.category}</p>
-                  <p className="mt-2 text-sm text-emerald-700">{formatINR(item.price)} each</p>
+          {cartItems.map((item) => {
+            const product = item.product || {};
+            const productId = product._id || product.id;
+            const price = product.discountPrice || product.price || 0;
+            return (
+              <article key={item.id || productId} className="flex flex-col gap-4 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-4">
+                  <img src={product.images?.[0] || 'https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=600&q=60'} alt={product.name} className="h-28 w-28 rounded-[1.75rem] object-cover" />
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">{product.name}</h3>
+                    <p className="mt-2 text-sm text-slate-500">Category: {product.category?.name || product.categorySlug || 'Fresh'}</p>
+                    <p className="mt-2 text-sm text-emerald-700">{formatINR(price)} each</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 text-sm text-slate-700">
-                  <button className="rounded-full bg-slate-100 px-4 py-2" onClick={() => updateCartItem(item._id, Math.max(item.quantity - 1, 1))}>-</button>
-                  <span className="min-w-[3rem] text-center font-semibold">{item.quantity}</span>
-                  <button className="rounded-full bg-slate-100 px-4 py-2" onClick={() => updateCartItem(item._id, item.quantity + 1)}>+</button>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-3 text-sm text-slate-700">
+                    <button className="rounded-full bg-slate-100 px-4 py-2" onClick={() => updateQuantity(productId, Math.max(item.quantity - 1, 1))}>-</button>
+                    <span className="min-w-[3rem] text-center font-semibold">{item.quantity}</span>
+                    <button className="rounded-full bg-slate-100 px-4 py-2" onClick={() => updateQuantity(productId, item.quantity + 1)}>+</button>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-slate-600">Subtotal:</span>
+                    <span className="text-lg font-semibold text-slate-900">{formatINR(price * item.quantity)}</span>
+                  </div>
+                  <button onClick={() => removeFromCart(productId)} className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100">
+                    Remove
+                  </button>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-600">Subtotal:</span>
-                  <span className="text-lg font-semibold text-slate-900">{formatINR(item.price * item.quantity)}</span>
-                </div>
-                <button onClick={() => removeFromCart(item._id)} className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100">
-                  Remove
-                </button>
-              </div>
-            </article>
-          ))}
+              </article>
+            )
+          })}
 
           <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-slate-900">Promo code</h3>
@@ -97,7 +107,7 @@ const Cart = () => {
             <div className="space-y-4 rounded-[2rem] bg-slate-50 p-6">
               <div className="flex items-center justify-between text-sm text-slate-600">
                 <span>Subtotal</span>
-                <span>{formatINR(cartTotal)}</span>
+                <span>{formatINR(cartSubtotal)}</span>
               </div>
               <div className="flex items-center justify-between text-sm text-slate-600">
                 <span>Delivery</span>

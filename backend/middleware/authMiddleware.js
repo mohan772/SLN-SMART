@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const supabase = require('../config/supabase');
 
 // Protect routes
 exports.protect = async (req, res, next) => {
@@ -22,7 +22,17 @@ exports.protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = await User.findById(decoded.id);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', decoded.id)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ message: 'Not authorized to access this route' });
+    }
+
+    req.user = user;
 
     next();
   } catch (err) {

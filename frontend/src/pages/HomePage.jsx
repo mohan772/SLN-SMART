@@ -18,6 +18,59 @@ const slugify = (text) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
+const defaultCategories = [
+  { name: 'Fresh Fruits', description: 'Hand-picked fruits at peak ripeness.', image: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&w=1200&q=80' },
+  { name: 'Fresh Vegetables', description: 'Crisp, healthy vegetables for every meal.', image: 'https://images.unsplash.com/photo-1566385101042-1a0aa0c1268c?auto=format&fit=crop&w=1200&q=80' },
+  { name: 'Leafy Vegetables', description: 'Green superfoods for salads and smoothies.', image: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=1200&q=80' },
+  { name: 'Root Vegetables', description: 'Earthy staples for hearty cooking.', image: 'https://images.unsplash.com/photo-1590868309235-ea34bed7bd7f?auto=format&fit=crop&w=1200&q=80' },
+  { name: 'Exotic Fruits', description: 'Rare tropical fruits sourced from premium growers.', image: 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?auto=format&fit=crop&w=1200&q=80' },
+];
+
+const defaultFeaturedProducts = [
+  {
+    _id: 'default-1',
+    name: 'Organic Fuji Apple',
+    description: 'Crisp, juicy apples grown with natural care and premium flavor.',
+    images: ['https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?auto=format&fit=crop&w=800&q=80'],
+    price: 4.99,
+    discountPrice: 3.99,
+    unit: 'kg',
+    rating: 4.8,
+    categorySlug: 'fresh-fruits',
+    category: { name: 'Fresh Fruits' },
+    stock: 20,
+    isOrganic: true,
+  },
+  {
+    _id: 'default-2',
+    name: 'Heritage Spinach',
+    description: 'Tender greens harvested early for the freshest taste and texture.',
+    images: ['https://images.unsplash.com/photo-1576045057995-568f588f82fb?auto=format&fit=crop&w=800&q=80'],
+    price: 2.50,
+    discountPrice: null,
+    unit: 'bunch',
+    rating: 4.7,
+    categorySlug: 'leafy-vegetables',
+    category: { name: 'Leafy Vegetables' },
+    stock: 30,
+    isOrganic: true,
+  },
+  {
+    _id: 'default-3',
+    name: 'Premium Broccoli',
+    description: 'Fresh, vibrant broccoli with firm florets and bold nutrition.',
+    images: ['https://images.unsplash.com/photo-1452948491233-ad8a1ed01085?auto=format&fit=crop&w=800&q=80'],
+    price: 4.00,
+    discountPrice: 3.50,
+    unit: 'piece',
+    rating: 4.6,
+    categorySlug: 'exotic-vegetables',
+    category: { name: 'Exotic Vegetables' },
+    stock: 15,
+    isOrganic: true,
+  },
+];
+
 const HomePage = () => {
   const [stats, setStats] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -28,9 +81,11 @@ const HomePage = () => {
     const loadCategories = async () => {
       try {
         const res = await api.get('/categories');
-        setCategories(res.data.data);
+        const categoryData = res.data.data || [];
+        setCategories(categoryData.length ? categoryData : defaultCategories);
       } catch (err) {
         console.error('Failed to load categories', err);
+        setCategories(defaultCategories);
       }
     };
 
@@ -53,12 +108,19 @@ const HomePage = () => {
   useEffect(() => {
     const loadFeaturedProducts = async () => {
       try {
-        const res = await api.get('/products?sort=-rating&limit=6');
-        if (res.data && res.data.data) {
-           setFeaturedProducts(res.data.data);
+        const res = await api.get('/products?sort=rating:desc&limit=6');
+        const productData = (res.data && res.data.data) ? res.data.data : [];
+        if (productData.length > 0) {
+          setFeaturedProducts(productData);
+          return;
         }
+
+        const fallback = await api.get('/products?limit=6');
+        const fallbackData = (fallback.data && fallback.data.data) ? fallback.data.data : [];
+        setFeaturedProducts(fallbackData.length > 0 ? fallbackData : defaultFeaturedProducts);
       } catch (err) {
         console.error('Failed to load featured products', err);
+        setFeaturedProducts(defaultFeaturedProducts);
       }
     };
     

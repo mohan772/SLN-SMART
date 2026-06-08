@@ -1,56 +1,92 @@
-const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const Product = require('./models/Product');
-const Category = require('./models/Category');
+
+// Load env vars first so the Supabase client can use them.
+dotenv.config({ path: './.env' });
+
+const supabase = require('./config/supabase');
 const { categories, products } = require('./data/seedData');
 
-// Load env vars
-dotenv.config({ path: './.env' });
+const slugify = (text) => {
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w-]+/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+};
 
 const seedDatabase = async () => {
   try {
-    console.log('Connecting to MongoDB...');
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected successfully.');
+    console.log('Seeding Supabase Database...');
 
-    console.log('Deleting existing collections to clear indexes...');
-    try { await Product.collection.drop(); } catch(e) {}
-    try { await Category.collection.drop(); } catch(e) {}
-    console.log('Existing collections dropped.');
+    // 1. Clear existing data (Optional, be careful)
+    // For a fresh seed, we might want to delete existing rows.
+    // NOTE: Foreign key constraints might require specific order or TRUNCATE CASCADE.
+    console.log('Clearing existing categories and products...');
+    await supabase.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('categories').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
+    // 2. Seed Categories
     console.log('Inserting categories...');
-    const insertedCategories = await Category.insertMany(categories);
+    const { data: insertedCategories, error: catError } = await supabase
+      .from('categories')
+      .insert(categories)
+      .select();
+
+    if (catError) throw catError;
     console.log(`${insertedCategories.length} categories inserted.`);
 
-    // Map category names to their new ObjectIds
+    // Create a map for name -> id
     const categoryMap = {};
-    insertedCategories.forEach((cat) => {
-      categoryMap[cat.name] = cat._id;
+    insertedCategories.forEach(cat => {
+      categoryMap[cat.name] = cat.id;
     });
 
-    console.log('Inserting products...');
-    const productsWithCategoryIds = products.map((prod) => {
-      const categoryId = categoryMap[prod.categoryName];
+    // 3. Seed Products
+    console.log('Preparing products...');
+    const productsToInsert = products.map(p => {
+      const categoryId = categoryMap[p.categoryName];
       if (!categoryId) {
-        console.warn(`Warning: Category not found for product ${prod.name}`);
+        console.warn(`Category not found for product: ${p.name}`);
       }
-      
-      const categorySlug = prod.categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
       return {
-        ...prod,
-        category: categoryId,
-        categorySlug: categorySlug,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        discount_price: p.discountPrice,
+        unit: p.unit,
+        images: p.images,
+        category_id: categoryId,
+        category_slug: slugify(p.categoryName),
+        stock: p.stock,
+        rating: p.rating,
+        num_reviews: p.numReviews,
+        is_featured: p.isFeatured,
+        is_organic: p.isOrganic,
+        nutritional_info: p.nutritionalInfo,
+        farmer_details: p.farmerDetails,
+        visibility: true,
+        is_deleted: false
       };
-    });
+    }).filter(p => p.category_id);
 
-    const insertedProducts = await Product.insertMany(productsWithCategoryIds);
+    console.log(`Inserting ${productsToInsert.length} products...`);
+    // Insert in batches if necessary, but 100+ should be fine in one go
+    const { data: insertedProducts, error: prodError } = await supabase
+      .from('products')
+      .insert(productsToInsert)
+      .select();
+
+    if (prodError) throw prodError;
     console.log(`${insertedProducts.length} products inserted.`);
 
     console.log('Database seeded successfully!');
     process.exit();
   } catch (err) {
-    console.error('Error seeding database:', err);
+    console.error('Seeding Error:', err.message);
     process.exit(1);
   }
 };

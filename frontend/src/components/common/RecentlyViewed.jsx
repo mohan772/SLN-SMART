@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useToast } from '../../context/ToastContext';
@@ -26,7 +26,7 @@ const RecentlyViewed = ({ currentProductId }) => {
   const fetchRecentlyViewed = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/recently-viewed', {
+      const res = await api.get('/recently-viewed', {
         headers: { Authorization: `Bearer ${token}` }
       });
       // Filter out the current product if on a product page

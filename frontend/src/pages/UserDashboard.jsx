@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { motion } from 'framer-motion';
 import { 
   ShoppingBag, 
@@ -28,12 +28,13 @@ const UserDashboard = () => {
   const fetchOrders = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/orders/myorders', {
+      const res = await api.get('/orders/myorders', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setOrders(res.data.data);
+      setOrders(res.data.data ?? []);
     } catch (err) {
       console.error(err);
+      setOrders([]);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { motion } from 'framer-motion';
 import { 
   Star, 
@@ -19,6 +19,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useCompare } from '../context/CompareContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { formatINR } from '../utils/currency';
 import RecentlyViewed from '../components/common/RecentlyViewed';
 
@@ -32,6 +33,7 @@ const ProductDetailsPage = () => {
   const { toggleWishlist, isInWishlist } = useWishlist();
   const { toggleCompare, isInCompare } = useCompare();
   const { isAuthenticated } = useAuth();
+  const { createToast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,7 +46,7 @@ const ProductDetailsPage = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`/api/products/${id}`);
+      const res = await api.get(`/products/${id}`);
       setProduct(res.data.data);
     } catch (err) {
       console.error(err);
@@ -56,7 +58,7 @@ const ProductDetailsPage = () => {
   const recordView = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/recently-viewed', { productId: id }, {
+      await api.post('/recently-viewed', { productId: id }, {
         headers: { Authorization: `Bearer ${token}` }
       });
     } catch (err) {
@@ -66,8 +68,11 @@ const ProductDetailsPage = () => {
 
   const handleAddToCart = async () => {
     const res = await addToCart(product._id, quantity);
-    if (res.success) {
-      // Show success toast or just stay
+    if (res?.success) {
+      createToast(`${product.name} added to cart!`);
+      navigate('/cart');
+    } else {
+      createToast(res?.message || 'Failed to add to cart. Please login.', 'error');
     }
   };
 

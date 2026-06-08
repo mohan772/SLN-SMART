@@ -97,9 +97,9 @@ const Navbar = () => {
                   )}
                   <Link to="/dashboard" className="flex items-center space-x-2 text-forest hover:text-gold transition-colors">
                     <div className="w-8 h-8 rounded-full bg-beige flex items-center justify-center overflow-hidden">
-                      {user.avatar ? <img src={user.avatar} alt={user.name} /> : <User size={18} />}
+                      {user.avatar ? <img src={user.avatar} alt={user?.name || user?.username || 'User'} /> : <User size={18} />}
                     </div>
-                    <span className="font-medium">{user.name.split(' ')[0]}</span>
+                    <span className="font-medium">{user?.name?.split(' ')[0] || user?.username || 'User'}</span>
                   </Link>
                   <button 
                     onClick={() => { logout(); navigate('/login'); }}

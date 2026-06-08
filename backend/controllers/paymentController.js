@@ -1,7 +1,6 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const Order = require('../models/Order');
-const Product = require('../models/Product');
+const supabase = require('../config/supabase');
 
 // Initialize Razorpay instance safely
 let razorpay;
@@ -19,7 +18,7 @@ try {
 }
 
 // ==========================================
-// CREATE RAZORPAY ORDER
+// CREATE ORDER (Supports Razorpay and COD)
 // ==========================================
 exports.createRazorpayOrder = async (req, res) => {
   try {
@@ -43,68 +42,122 @@ exports.createRazorpayOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cart is empty' });
     }
 
-    // Check product availability and prices
+    // Check product availability
     for (let item of orderItems) {
-      const product = await Product.findById(item.product);
+      const { data: product } = await supabase
+        .from('products')
+        .select('stock, name')
+        .eq('id', item.product)
+        .single();
+
       if (!product) {
         return res.status(404).json({ 
           success: false, 
-          message: `Product ${item.name} not found` 
+          message: `Product "${item.name}" (ID: ${item.product}) not found in database` 
         });
       }
       if (product.stock < item.quantity) {
         return res.status(400).json({ 
           success: false, 
-          message: `Insufficient stock for ${item.name}` 
+          message: `Insufficient stock for ${product.name}` 
         });
       }
     }
 
-    // Razorpay expects amount in paise (multiply by 100)
-    const razorpayAmount = Math.round(totalPrice * 100);
+    let razorpayOrderId = null;
+    let razorpayAmount = 0;
 
-    // Create Razorpay order
-    const razorpayOrder = await razorpay.orders.create({
-      amount: razorpayAmount,
-      currency: 'INR',
-      receipt: `order_${Date.now()}`,
-      payment_capture: 1, // Auto-capture payment
-      notes: {
-        userId: userId,
-        orderItems: JSON.stringify(orderItems),
-        shippingAddress: JSON.stringify(shippingAddress),
-      },
-    });
+    if (paymentMethod === 'razorpay') {
+      if (!razorpay) {
+        return res.status(500).json({
+          success: false,
+          message: 'Razorpay is not configured on the server. Please choose Cash on Delivery.',
+        });
+      }
 
-    // Create database order document (payment pending)
-    const order = new Order({
-      user: userId,
-      orderItems,
-      shippingAddress,
-      paymentMethod,
-      itemsPrice,
-      taxPrice,
-      shippingPrice,
-      discountPrice,
-      totalPrice,
-      deliverySlot,
-      specialInstructions,
-      razorpay: {
-        orderId: razorpayOrder.id,
-      },
-      isPaid: false,
-      status: 'Pending',
-    });
+      // Razorpay expects amount in paise (multiply by 100)
+      razorpayAmount = Math.round(totalPrice * 100);
 
-    await order.save();
+      // Create Razorpay order
+      const razorpayOrder = await razorpay.orders.create({
+        amount: razorpayAmount,
+        currency: 'INR',
+        receipt: `order_${Date.now()}`,
+        payment_capture: 1, // Auto-capture payment
+        notes: {
+          userId: userId,
+        },
+      });
+      razorpayOrderId = razorpayOrder.id;
+    }
+
+    // Create database order document
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        user_id: userId,
+        shipping_address: shippingAddress,
+        payment_method: paymentMethod,
+        items_price: itemsPrice,
+        tax_price: taxPrice,
+        shipping_price: shippingPrice,
+        discount_price: discountPrice,
+        total_price: totalPrice,
+        delivery_slot: deliverySlot,
+        special_instructions: specialInstructions,
+        razorpay: razorpayOrderId ? {
+          orderId: razorpayOrderId,
+        } : null,
+        is_paid: false,
+        status: paymentMethod === 'cod' ? 'Ordered' : 'Pending',
+      })
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // Insert Order Items
+    const itemsToInsert = orderItems.map(item => ({
+      order_id: order.id,
+      product_id: item.product,
+      name: item.name,
+      quantity: item.quantity,
+      image: item.image,
+      price: item.price
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(itemsToInsert);
+
+    if (itemsError) throw itemsError;
+
+    // If COD, update stock immediately as payment is not awaited
+    if (paymentMethod === 'cod') {
+      for (let item of orderItems) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.product)
+          .single();
+
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ stock: Math.max(0, product.stock - item.quantity) })
+            .eq('id', item.product);
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
-      orderId: order._id,
-      razorpayOrderId: razorpayOrder.id,
+      orderId: order.id,
+      razorpayOrderId: razorpayOrderId,
       razorpayKeyId: process.env.RAZORPAY_KEY_ID,
       amount: totalPrice,
+      amountInPaise: razorpayAmount,
     });
   } catch (error) {
     console.error('Payment Order Creation Error:', error);
@@ -130,8 +183,13 @@ exports.verifyRazorpayPayment = async (req, res) => {
     }
 
     // Find the order
-    const order = await Order.findById(orderId);
-    if (!order) {
+    const { data: order, error: findError } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('id', orderId)
+      .single();
+
+    if (findError || !order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',
@@ -155,28 +213,45 @@ exports.verifyRazorpayPayment = async (req, res) => {
     }
 
     // Update order with payment details
-    order.razorpay.paymentId = razorpayPaymentId;
-    order.razorpay.signature = razorpaySignature;
-    order.isPaid = true;
-    order.paidAt = new Date();
-    order.status = 'Ordered';
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update({
+        razorpay: {
+           ...order.razorpay,
+           paymentId: razorpayPaymentId,
+           signature: razorpaySignature
+        },
+        is_paid: true,
+        paid_at: new Date().toISOString(),
+        status: 'Ordered'
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
 
     // Update product stock
-    for (let item of order.orderItems) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: -item.quantity } },
-        { new: true }
-      );
-    }
+    for (let item of order.order_items) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', item.product_id)
+        .single();
 
-    await order.save();
+      if (product) {
+        await supabase
+          .from('products')
+          .update({ stock: Math.max(0, product.stock - item.quantity) })
+          .eq('id', item.product_id);
+      }
+    }
 
     res.status(200).json({
       success: true,
       message: 'Payment verified successfully!',
-      orderId: order._id,
-      order: order,
+      orderId: updatedOrder.id,
+      order: updatedOrder,
     });
   } catch (error) {
     console.error('Payment Verification Error:', error);
@@ -192,11 +267,13 @@ exports.verifyRazorpayPayment = async (req, res) => {
 // ==========================================
 exports.getOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
-      .populate('user', 'name email phone')
-      .populate('orderItems.product', 'name image price');
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*, user:user_id(name, email, phone), order_items(*, product:product_id(name, image, price))')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!order) {
+    if (error || !order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',
@@ -204,7 +281,7 @@ exports.getOrder = async (req, res) => {
     }
 
     // Verify user owns this order
-    if (order.user._id.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to view this order',
@@ -228,9 +305,13 @@ exports.getOrder = async (req, res) => {
 // ==========================================
 exports.getUserOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user.id })
-      .populate('orderItems.product', 'name image price')
-      .sort({ createdAt: -1 });
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, order_items(*, product:product_id(name, image, price))')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -250,9 +331,13 @@ exports.getUserOrders = async (req, res) => {
 // ==========================================
 exports.cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const { data: order, error: findError } = await supabase
+      .from('orders')
+      .select('*, order_items(*)')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!order) {
+    if (findError || !order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',
@@ -260,7 +345,7 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // Verify user owns this order
-    if (order.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to cancel this order',
@@ -276,27 +361,37 @@ exports.cancelOrder = async (req, res) => {
     }
 
     // If paid, mark as refunded
-    if (order.isPaid) {
-      order.status = 'Refunded';
-    } else {
-      order.status = 'Cancelled';
-    }
+    const newStatus = order.is_paid ? 'Refunded' : 'Cancelled';
+
+    const { data: updatedOrder, error: updateError } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
 
     // Restore product stock
-    for (let item of order.orderItems) {
-      await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { stock: item.quantity } },
-        { new: true }
-      );
-    }
+    for (let item of order.order_items) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', item.product_id)
+        .single();
 
-    await order.save();
+      if (product) {
+        await supabase
+          .from('products')
+          .update({ stock: product.stock + item.quantity })
+          .eq('id', item.product_id);
+      }
+    }
 
     res.status(200).json({
       success: true,
       message: 'Order cancelled successfully',
-      order,
+      order: updatedOrder,
     });
   } catch (error) {
     res.status(500).json({
@@ -311,10 +406,12 @@ exports.cancelOrder = async (req, res) => {
 // ==========================================
 exports.getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
-      .populate('user', 'name email phone')
-      .populate('orderItems.product', 'name image price')
-      .sort({ createdAt: -1 });
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('*, user:user_id(name, email, phone), order_items(*, product:product_id(name, image, price))')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -343,14 +440,14 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('user', 'name email phone')
-     .populate('orderItems.product', 'name image');
+    const { data: order, error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', req.params.id)
+      .select('*, user:user_id(name, email, phone), order_items(*)')
+      .single();
 
-    if (!order) {
+    if (error || !order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',

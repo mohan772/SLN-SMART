@@ -31,7 +31,7 @@ const HomePage = () => {
     try {
       const [categoriesRes, productsRes] = await Promise.all([
         api.get('/categories'),
-        api.get('/products?sort=-rating&limit=12'),
+        api.get('/products?sort=rating:desc&limit=12'),
       ]);
 
       setCategories(categoriesRes.data.data || []);
@@ -39,7 +39,7 @@ const HomePage = () => {
       
       // Mock flash sales - products with discounts
       const flashSalesProducts = (productsRes.data.data || [])
-        .filter((p) => p.discount > 0)
+        .filter((p) => p.discountPrice > 0)
         .slice(0, 5);
       setFlashSales(flashSalesProducts);
     } catch (err) {

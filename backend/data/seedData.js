@@ -5,6 +5,21 @@ const categories = [
     image: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&w=1200&q=80' 
   },
   { 
+    name: 'Citrus Fruits', 
+    description: 'Bright and zesty citrus fruits, perfect for refreshing juices and immunity-boosting snacks.', 
+    image: 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
+    name: 'Berries', 
+    description: 'Sweet, antioxidant-rich berries for smoothies, desserts, and healthy breakfasts.', 
+    image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
+    name: 'Tropical Fruits', 
+    description: 'Exotic tropical delights sourced for their sweetness and fragrant flavors.', 
+    image: 'https://images.unsplash.com/photo-1502741126161-b048400d2a7c?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
     name: 'Fresh Vegetables', 
     description: 'Crisp, vibrant, and packed with essential nutrients for your daily wellness.', 
     image: 'https://images.unsplash.com/photo-1566385101042-1a0aa0c1268c?auto=format&fit=crop&w=1200&q=80' 
@@ -18,6 +33,16 @@ const categories = [
     name: 'Root Vegetables', 
     description: 'Earthy staples that provide the foundation for hearty, wholesome meals.', 
     image: 'https://images.unsplash.com/photo-1590868309235-ea34bed7bd7f?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
+    name: 'Seasonal Vegetables', 
+    description: 'Fresh seasonal vegetables for the finest local recipes all year round.', 
+    image: 'https://images.unsplash.com/photo-1506802915222-1a1f5f54d106?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
+    name: 'Salad Greens', 
+    description: 'Tender leafy salad greens, ready to make every salad crisp and delicious.', 
+    image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1200&q=80' 
   },
   { 
     name: 'Exotic Fruits', 
@@ -42,7 +67,12 @@ const categories = [
   { 
     name: 'Seasonal Fruits', 
     description: 'The finest limited-time harvests, celebrating the best each season has to offer.', 
-    image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1200&q=80' 
+    image: 'https://images.unsplash.com/photo-1499616017701-35c2a9537aa5?auto=format&fit=crop&w=1200&q=80' 
+  },
+  { 
+    name: 'Organic Fruits', 
+    description: 'Certified organic fruits, grown naturally without synthetic pesticides or fertilizers.', 
+    image: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&w=1200&q=80' 
   },
   { 
     name: 'Organic Vegetables', 
@@ -95,6 +125,18 @@ const productImageMap = {
   'California Almonds': 'https://images.unsplash.com/photo-1508029091899-599903ad9c8f?auto=format&fit=crop&w=800&q=80',
   'Red Roses': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
   'White Button Mushroom': 'https://images.unsplash.com/photo-1528513139038-ca02c84658e8?auto=format&fit=crop&w=800&q=80',
+  'Lemon': 'https://images.unsplash.com/photo-1502741338009-cac2772e18bc?auto=format&fit=crop&w=800&q=80',
+  'Sweet Lime': 'https://images.unsplash.com/photo-1524592833360-3a9dea735a62?auto=format&fit=crop&w=800&q=80',
+  'Grapefruit': 'https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?auto=format&fit=crop&w=800&q=80',
+  'Blueberry': 'https://images.unsplash.com/photo-1502741126161-b048400d2a7c?auto=format&fit=crop&w=800&q=80',
+  'Blackberry': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+  'Raspberry': 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=800&q=80',
+  'Mulberry': 'https://images.unsplash.com/photo-1502741126161-b048400d2a7c?auto=format&fit=crop&w=800&q=80',
+  'Romaine Lettuce': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80',
+  'Arugula / Rocket': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80',
+  'Watercress': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80',
+  'Baby Spinach': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80',
+  'Mesclun Mix': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=800&q=80',
 };
 
 // Default image if not in map
@@ -133,10 +175,14 @@ const generateProducts = () => {
       images: [productImageMap[name] || getDefaultImage(category)],
       categoryName: category,
       stock: Math.floor(Math.random() * 50) + 20,
-      rating: (Math.random() * 0.5 + 4.5).toFixed(1), // Higher ratings for "premium" feel (4.5 to 5.0)
+      rating: parseFloat((Math.random() * 0.5 + 4.5).toFixed(1)), // Higher ratings for "premium" feel (4.5 to 5.0)
       numReviews: Math.floor(Math.random() * 200) + 50,
       isFeatured: Math.random() > 0.85,
+      trending: Math.random() > 0.75,
+      seasonal: category.includes('Seasonal') || category.includes('seasonal') || Math.random() > 0.9,
       isOrganic: isOrganic,
+      visibility: true,
+      isDeleted: false,
       nutritionalInfo: {
         calories: `${Math.floor(Math.random() * 60) + 20} kcal`,
         vitamins: ['Vitamin A', 'Vitamin C', 'Vitamin K'],
@@ -219,6 +265,41 @@ const generateProducts = () => {
   addProduct('Parsley', 'Exotic Vegetables', 2.00, null, 'bunch', false);
   addProduct('Baby Corn', 'Exotic Vegetables', 1.50, 1.20, 'box', true);
 
+  // Citrus Fruits
+  addProduct('Lemon', 'Citrus Fruits', 2.50, 2.00, 'kg', true, 'Fresh lemons with bright zest and a tart flavor, perfect for refreshing drinks and zesty recipes.');
+  addProduct('Sweet Lime', 'Citrus Fruits', 2.20, null, 'kg', true, 'Juicy sweet limes with a mellow citrus flavor, excellent for juices and cooling summer drinks.');
+  addProduct('Grapefruit', 'Citrus Fruits', 3.50, 3.00, 'kg', false, 'Large, ruby-fleshed grapefruits with tangy sweetness for a revitalizing breakfast boost.');
+  addProduct('Kinnow Mandarin', 'Citrus Fruits', 4.00, 3.50, 'kg', true, 'Easy-peel kinnow mandarins with a rich citrus aroma and vibrant sweetness.');
+  addProduct('Lime', 'Citrus Fruits', 1.80, null, 'kg', false, 'Fresh garden limes, perfect for brightening salads, marinades, and cocktails.');
+
+  // Berries
+  addProduct('Blueberry', 'Berries', 8.00, 7.20, 'box (125g)', false, 'Sweet and tart blueberries packed with antioxidants, ideal for breakfast bowls and desserts.');
+  addProduct('Raspberry', 'Berries', 9.00, 8.00, 'box (125g)', true, 'Delicate raspberries with rich berry flavor, perfect for smoothies and gourmet desserts.');
+  addProduct('Blackberry', 'Berries', 9.50, null, 'box (125g)', true, 'Luscious blackberries with a juicy burst of flavor, excellent in jams and salads.');
+  addProduct('Strawberry Basket', 'Berries', 6.00, 5.00, 'box (250g)', false, 'Sweet ripe strawberries with fragrant aroma and bright red color for every indulgent bite.');
+  addProduct('Mulberry', 'Berries', 7.00, null, 'box (250g)', true, 'Soft, juicy mulberries with a rich, sweet flavor that elevates smoothies and baked treats.');
+
+  // Tropical Fruits
+  addProduct('King Coconut', 'Tropical Fruits', 5.00, 4.50, 'piece', true, 'Refreshing king coconut water with natural electrolytes, perfect for hydration on warm days.');
+  addProduct('Custard Apple', 'Tropical Fruits', 5.50, 4.90, 'kg', true, 'Creamy custard apples with sweet pulp and exotic flavor, a tropical dessert favorite.');
+  addProduct('Jamun', 'Tropical Fruits', 4.20, null, 'kg', false, 'Tangy jamun fruit with rich color and healthful nutrients from the tropics.');
+  addProduct('Sapodilla', 'Tropical Fruits', 4.00, null, 'kg', true, 'Sweet sapodilla with a caramel-like taste, perfect for snacking and natural smoothies.');
+  addProduct('Pineapple Queen', 'Tropical Fruits', 3.50, 2.90, 'piece', false, 'Sweet, golden pineapple with juicy flesh and a refreshing tropical aroma.');
+
+  // Salad Greens
+  addProduct('Romaine Lettuce', 'Salad Greens', 2.80, 2.40, 'piece', true, 'Crisp romaine lettuce with firm ribs and a crunchy texture, perfect for classic salads.');
+  addProduct('Arugula / Rocket', 'Salad Greens', 3.20, 2.80, 'box', true, 'Peppery arugula leaves that add a bold, gourmet note to salads and sandwiches.');
+  addProduct('Watercress', 'Salad Greens', 3.00, null, 'bunch', true, 'Tender watercress with a fresh, peppery bite, ideal for salads and soups.');
+  addProduct('Baby Spinach', 'Salad Greens', 3.50, 3.00, 'box', true, 'Mild baby spinach leaves for smoothies, salads, and light sautés.');
+  addProduct('Mesclun Mix', 'Salad Greens', 4.00, 3.50, 'box', true, 'Premium mixed salad greens for effortless gourmet salads with vibrant texture.');
+
+  // Organic Fruits
+  addProduct('Organic Apple', 'Organic Fruits', 5.00, 4.20, 'kg', true, 'Certified organic apples grown without chemical sprays for naturally sweet, crisp fruit.');
+  addProduct('Organic Banana', 'Organic Fruits', 2.50, 2.20, 'kg', true, 'Naturally ripened organic bananas with creamy texture and gentle sweetness.');
+  addProduct('Organic Orange', 'Organic Fruits', 4.50, 4.00, 'kg', true, 'Fresh organic oranges with juicy segments and bright citrus flavor.');
+  addProduct('Organic Pear', 'Organic Fruits', 5.50, null, 'kg', true, 'Soft, fragrant organic pears that offer a smooth, honeyed sweetness.');
+  addProduct('Organic Strawberry', 'Organic Fruits', 8.50, 7.50, 'box (250g)', true, 'Hand-picked organic strawberries, intensely sweet and perfect for guilt-free treats.');
+
   // Root Vegetables
   addProduct('Sweet Potato', 'Root Vegetables', 2.00, null, 'kg', true);
   addProduct('Tapioca / Cassava', 'Root Vegetables', 1.50, null, 'kg', false);
@@ -285,154 +366,6 @@ const generateProducts = () => {
 
   // Mushroom Varieties
   addProduct('White Button Mushroom', 'Mushroom Varieties', 2.50, null, 'pack (200g)', false, 'Pristine white button mushrooms, cultivated in climate-controlled environments for consistent quality and a mild, versatile flavor.');
-  addProduct('Oyster Mushroom', 'Mushroom Varieties', 3.50, 3.00, 'pack (200g)', true);
-  addProduct('Milky Mushroom', 'Mushroom Varieties', 3.00, null, 'pack (200g)', false);
-  addProduct('Shiitake Mushroom Fresh', 'Mushroom Varieties', 6.00, 5.00, 'pack (200g)', true);
-
-  return products;
-};
-
-module.exports = {
-  categories,
-  products: generateProducts(),
-};
-
-  // Fresh Fruits
-  addProduct('Fuji Apple', 'Fresh Fruits', 4.99, 3.99, 'kg', true, 'Crisp, sweet, and juicy Fuji apples.');
-  addProduct('Robusta Banana', 'Fresh Fruits', 1.50, null, 'kg', false);
-  addProduct('Nagpur Orange', 'Fresh Fruits', 3.50, 2.99, 'kg', true);
-  addProduct('Alphonso Mango', 'Fresh Fruits', 8.99, 7.50, 'kg', true, 'The king of mangoes, sweet and aromatic.');
-  addProduct('Semi-Ripe Papaya', 'Fresh Fruits', 2.00, null, 'piece', false);
-  addProduct('Kiran Watermelon', 'Fresh Fruits', 1.20, null, 'kg', false);
-  addProduct('Green Seedless Grapes', 'Fresh Fruits', 5.50, 4.50, 'kg', true);
-  addProduct('Pink Guava', 'Fresh Fruits', 2.50, null, 'kg', true);
-  addProduct('Queen Pineapple', 'Fresh Fruits', 3.00, 2.50, 'piece', false);
-  addProduct('Bhagwa Pomegranate', 'Fresh Fruits', 6.00, null, 'kg', true);
-  addProduct('Muskmelon / Kharbuja', 'Fresh Fruits', 2.20, null, 'kg', false);
-  addProduct('Sapota (Chikoo)', 'Fresh Fruits', 3.20, null, 'kg', true);
-  addProduct('Zespri Green Kiwi', 'Fresh Fruits', 4.50, 3.99, 'pack of 3', false);
-  addProduct('William Bartlett Pear', 'Fresh Fruits', 4.00, null, 'kg', true);
-  addProduct('Sweet Strawberry', 'Fresh Fruits', 5.00, 4.00, 'box (200g)', false);
-
-  // Fresh Vegetables
-  addProduct('Hybrid Tomato', 'Fresh Vegetables', 1.20, 0.99, 'kg', true);
-  addProduct('Local Tomato', 'Fresh Vegetables', 1.00, null, 'kg', false);
-  addProduct('Potato / Aloo', 'Fresh Vegetables', 0.80, null, 'kg', true);
-  addProduct('Red Onion', 'Fresh Vegetables', 1.50, null, 'kg', false);
-  addProduct('Ooty Carrot', 'Fresh Vegetables', 2.50, 2.00, 'kg', true);
-  addProduct('Fresh Beetroot', 'Fresh Vegetables', 1.80, null, 'kg', true);
-  addProduct('French Beans', 'Fresh Vegetables', 3.00, 2.50, 'kg', false);
-  addProduct('Purple Brinjal', 'Fresh Vegetables', 2.20, null, 'kg', true);
-  addProduct('Lady Finger / Okra', 'Fresh Vegetables', 2.50, null, 'kg', false);
-  addProduct('Green Cabbage', 'Fresh Vegetables', 1.50, null, 'piece', true);
-  addProduct('Cauliflower', 'Fresh Vegetables', 2.00, 1.50, 'piece', false);
-  addProduct('Green Capsicum', 'Fresh Vegetables', 3.50, null, 'kg', true);
-  addProduct('Yellow Pumpkin', 'Fresh Vegetables', 1.00, null, 'kg', false);
-  addProduct('Bottle Gourd', 'Fresh Vegetables', 1.20, null, 'piece', true);
-  addProduct('Bitter Gourd', 'Fresh Vegetables', 2.00, null, 'kg', false);
-  addProduct('White Radish', 'Fresh Vegetables', 1.50, null, 'kg', true);
-
-  // Leafy Vegetables
-  addProduct('Palak / Spinach', 'Leafy Vegetables', 1.00, 0.80, 'bunch', true);
-  addProduct('Coriander Leaves', 'Leafy Vegetables', 0.50, null, 'bunch', true);
-  addProduct('Mint Leaves / Pudina', 'Leafy Vegetables', 0.50, null, 'bunch', true);
-  addProduct('Curry Leaves', 'Leafy Vegetables', 0.30, null, 'bunch', false);
-  // Leafy Vegetables continued
-  addProduct('Iceberg Lettuce', 'Leafy Vegetables', 2.50, null, 'piece', true);
-  addProduct('Red Amaranthus', 'Leafy Vegetables', 1.20, 1.00, 'bunch', false);
-  addProduct('Methi / Fenugreek Leaves', 'Leafy Vegetables', 1.00, null, 'bunch', true);
-  addProduct('Spring Onion', 'Leafy Vegetables', 1.50, null, 'bunch', false);
-  addProduct('Mustard Leaves / Sarson', 'Leafy Vegetables', 1.20, null, 'bunch', true);
-  addProduct('Gongura Leaves', 'Leafy Vegetables', 1.00, null, 'bunch', false);
-
-  // Exotic Fruits
-  addProduct('Pink Dragon Fruit', 'Exotic Fruits', 5.00, 4.50, 'piece', true);
-  addProduct('Hass Avocado', 'Exotic Fruits', 6.00, 5.00, 'piece', true);
-  addProduct('Imported Blueberry', 'Exotic Fruits', 8.00, 7.00, 'box (125g)', false);
-  addProduct('Red Raspberry', 'Exotic Fruits', 9.00, null, 'box (125g)', true);
-  addProduct('Dark Red Cherry', 'Exotic Fruits', 12.00, 10.00, 'box (250g)', false);
-  addProduct('Passion Fruit', 'Exotic Fruits', 4.00, null, 'kg', true);
-  addProduct('Mangosteen', 'Exotic Fruits', 15.00, null, 'kg', false);
-  addProduct('Rambutan', 'Exotic Fruits', 10.00, 8.50, 'box (250g)', true);
-
-  // Exotic Vegetables
-  addProduct('Broccoli', 'Exotic Vegetables', 4.00, 3.50, 'piece', true);
-  addProduct('Zucchini Green', 'Exotic Vegetables', 3.00, null, 'kg', false);
-  addProduct('Zucchini Yellow', 'Exotic Vegetables', 3.50, 3.00, 'kg', true);
-  addProduct('Red Bell Pepper', 'Exotic Vegetables', 4.50, 4.00, 'kg', false);
-  addProduct('Yellow Bell Pepper', 'Exotic Vegetables', 4.50, null, 'kg', true);
-  addProduct('Cherry Tomato', 'Exotic Vegetables', 2.50, null, 'box (250g)', true);
-  addProduct('Asparagus', 'Exotic Vegetables', 8.00, 7.00, 'bunch', false);
-  addProduct('Celery', 'Exotic Vegetables', 3.00, null, 'bunch', true);
-  addProduct('Parsley', 'Exotic Vegetables', 2.00, null, 'bunch', false);
-  addProduct('Baby Corn', 'Exotic Vegetables', 1.50, 1.20, 'box', true);
-
-  // Root Vegetables
-  addProduct('Sweet Potato', 'Root Vegetables', 2.00, null, 'kg', true);
-  addProduct('Tapioca / Cassava', 'Root Vegetables', 1.50, null, 'kg', false);
-  addProduct('Turnip', 'Root Vegetables', 1.80, null, 'kg', true);
-  addProduct('Elephant Yam / Suran', 'Root Vegetables', 2.50, 2.00, 'kg', false);
-  addProduct('Fresh Ginger', 'Root Vegetables', 4.00, null, 'kg', true);
-  addProduct('Garlic', 'Root Vegetables', 5.00, 4.50, 'kg', false);
-  addProduct('Colocasia / Arbi', 'Root Vegetables', 2.20, null, 'kg', true);
-
-  // Herbs
-  addProduct('Fresh Basil', 'Herbs', 1.50, null, 'bunch', true);
-  addProduct('Rosemary', 'Herbs', 2.00, 1.50, 'bunch', false);
-  addProduct('Thyme', 'Herbs', 2.00, null, 'bunch', true);
-  addProduct('Lemongrass', 'Herbs', 1.00, null, 'bunch', false);
-  addProduct('Oregano Fresh', 'Herbs', 2.50, null, 'bunch', true);
-
-  // Salads & Juices
-  addProduct('Mixed Salad Box', 'Salads & Juices', 3.50, 3.00, 'box', true);
-  addProduct('Caesar Salad Kit', 'Salads & Juices', 4.50, null, 'box', false);
-  addProduct('Fresh Orange Juice', 'Salads & Juices', 3.00, null, 'bottle (250ml)', true);
-  addProduct('Cold Pressed Detox Juice', 'Salads & Juices', 4.00, 3.50, 'bottle (250ml)', true);
-
-  // Seasonal Fruits
-  addProduct('Lychee', 'Seasonal Fruits', 6.00, 5.00, 'box (500g)', false);
-  addProduct('Alphonso Mango', 'Seasonal Fruits', 8.99, null, 'kg', true);
-  addProduct('Indian Plum', 'Seasonal Fruits', 4.00, null, 'kg', false);
-  addProduct('Sitaphal / Custard Apple', 'Seasonal Fruits', 5.50, 4.50, 'kg', true);
-
-  // Organic Vegetables
-  addProduct('Organic Tomato', 'Organic Vegetables', 2.00, null, 'kg', true);
-  addProduct('Organic Onion', 'Organic Vegetables', 2.50, null, 'kg', true);
-  addProduct('Organic Potato', 'Organic Vegetables', 1.50, 1.20, 'kg', true);
-  addProduct('Organic Cucumber', 'Organic Vegetables', 1.80, null, 'kg', true);
-  addProduct('Organic Carrots', 'Organic Vegetables', 3.00, null, 'kg', true);
-  addProduct('Organic Beetroot', 'Organic Vegetables', 2.50, null, 'kg', true);
-  
-  // Regional Favorites
-  addProduct('Madras Cucumber', 'Regional Favorites', 1.50, null, 'kg', false);
-  addProduct('Snake Gourd', 'Regional Favorites', 1.80, null, 'kg', true);
-  addProduct('Ridge Gourd', 'Regional Favorites', 2.00, 1.50, 'kg', false);
-  addProduct('Ash Gourd', 'Regional Favorites', 1.20, null, 'kg', true);
-  addProduct('Tinda', 'Regional Favorites', 2.50, null, 'kg', false);
-  addProduct('Banana Stem', 'Regional Favorites', 1.00, null, 'piece', true);
-  addProduct('Banana Flower', 'Regional Favorites', 1.50, null, 'piece', false);
-
-  // Dry Fruits
-  addProduct('California Almonds', 'Dry Fruits', 15.00, 14.00, 'kg', false);
-  addProduct('Cashew Nuts W320', 'Dry Fruits', 18.00, 16.50, 'kg', true);
-  addProduct('Indian Raisins', 'Dry Fruits', 8.00, null, 'kg', false);
-  addProduct('Walnut Kernels', 'Dry Fruits', 22.00, 20.00, 'kg', true);
-  addProduct('Pistachios Roasted', 'Dry Fruits', 25.00, null, 'kg', false);
-  addProduct('Dried Figs / Anjeer', 'Dry Fruits', 16.00, 14.50, 'kg', true);
-  
-  // Flowers
-  addProduct('Marigold Flowers', 'Flowers', 2.00, null, 'kg', true);
-  addProduct('Jasmine String', 'Flowers', 1.50, null, 'meter', false);
-  addProduct('Red Roses', 'Flowers', 3.00, 2.50, 'bunch (10 stems)', true);
-  addProduct('Lotus', 'Flowers', 1.00, null, 'piece', false);
-
-  // Sprouts
-  addProduct('Moong Sprouts', 'Sprouts', 1.50, 1.20, 'pack (200g)', true);
-  addProduct('Mixed Bean Sprouts', 'Sprouts', 2.00, null, 'pack (200g)', false);
-  addProduct('Alfalfa Sprouts', 'Sprouts', 3.00, 2.50, 'pack (100g)', true);
-
-  // Mushroom Varieties
-  addProduct('White Button Mushroom', 'Mushroom Varieties', 2.50, null, 'pack (200g)', false);
   addProduct('Oyster Mushroom', 'Mushroom Varieties', 3.50, 3.00, 'pack (200g)', true);
   addProduct('Milky Mushroom', 'Mushroom Varieties', 3.00, null, 'pack (200g)', false);
   addProduct('Shiitake Mushroom Fresh', 'Mushroom Varieties', 6.00, 5.00, 'pack (200g)', true);

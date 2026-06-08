@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useCart } from '../../context/CartContext'
 import CartDrawer from '../CartDrawer'
 import { motion } from 'framer-motion'
 import { FiShoppingCart, FiMenu, FiX, FiUser } from 'react-icons/fi'
@@ -14,7 +15,8 @@ const menuItems = [
 ]
 
 const NavBar = () => {
-  const { isAuthenticated, user, logout, cartQuantity } = useAuth()
+  const { isAuthenticated, user, logout } = useAuth()
+  const { cartCount } = useCart()
   const [open, setOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -63,9 +65,9 @@ const NavBar = () => {
             className="relative flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition-colors hover:bg-forest hover:text-white"
           >
             <FiShoppingCart className="h-5 w-5" />
-            {cartQuantity > 0 && (
+            {cartCount > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white ring-2 ring-white">
-                {cartQuantity}
+                {cartCount}
               </span>
             )}
           </button>
@@ -78,7 +80,7 @@ const NavBar = () => {
                 <div className="h-9 w-9 rounded-full bg-emerald-50 flex items-center justify-center text-forest group-hover:bg-forest group-hover:text-white transition-colors">
                   <FiUser />
                 </div>
-                <span className="text-sm font-bold text-slate-700">{user?.name?.split(' ')[0]}</span>
+                <span className="text-sm font-bold text-slate-700">{user?.name?.split(' ')[0] || user?.username || 'User'}</span>
               </Link>
               <button
                 onClick={logout}
@@ -130,7 +132,7 @@ const NavBar = () => {
                 className="flex items-center justify-between rounded-2xl bg-slate-50 p-4 font-bold text-slate-900"
               >
                 <span className="flex items-center gap-3"><FiShoppingCart /> Cart</span>
-                <span className="bg-forest text-white px-3 py-1 rounded-full text-xs">{cartQuantity}</span>
+                <span className="bg-forest text-white px-3 py-1 rounded-full text-xs">{cartCount}</span>
               </button>
               {isAuthenticated ? (
                 <>
@@ -169,7 +171,5 @@ const NavBar = () => {
     </>
   )
 }
-
-export default NavBar
 
 export default NavBar

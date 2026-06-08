@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const bcrypt = require('bcryptjs');
+const supabase = require('../config/supabase');
 const { sendOTP: sendMsg91OTP, verifyOTP: verifyMsg91OTP } = require('../utils/msg91');
 
 // @desc    Send OTP via MSG91
@@ -21,24 +22,39 @@ exports.sendOTP = async (req, res) => {
 
     // Generate 6 digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpire = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const otpExpire = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
 
-    // Store OTP in user record or a temporary place
-    // For simplicity, we can store it in the user record if exists, or create a temporary record
-    let user = await User.findOne({ phone: phoneNumber });
-    
-    if (!user) {
-      // Create a temporary user if not exists (or just store OTP in a separate collection)
-      // We'll just use the User model with isVerified: false
-      user = new User({
-        phone: phoneNumber,
-        isVerified: false
-      });
+    // Check if user exists
+    const { data: user, error: findError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', phoneNumber)
+      .single();
+
+    if (findError && findError.code !== 'PGRST116') {
+       throw findError;
     }
 
-    user.otp = otp;
-    user.otpExpire = otpExpire;
-    await user.save();
+    if (!user) {
+      // Create a temporary user if not exists
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          phone: phoneNumber,
+          otp: otp,
+          otp_expire: otpExpire,
+          is_verified: false,
+          username: `user_${phoneNumber}` // Placeholder username
+        });
+      if (insertError) throw insertError;
+    } else {
+      // Update existing user
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ otp, otp_expire: otpExpire })
+        .eq('id', user.id);
+      if (updateError) throw updateError;
+    }
 
     // Send OTP via MSG91
     await sendMsg91OTP(formattedPhone, otp);
@@ -64,18 +80,17 @@ exports.verifyOTP = async (req, res) => {
       return res.status(400).json({ message: 'Phone number and OTP are required' });
     }
 
-    const user = await User.findOne({
-      phone: phoneNumber,
-      otp,
-      otpExpire: { $gt: Date.now() }
-    });
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', phoneNumber)
+      .eq('otp', otp)
+      .gt('otp_expire', new Date().toISOString())
+      .single();
 
-    if (!user) {
+    if (error || !user) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
-
-    // OTP is valid. We don't mark as verified yet if it's during registration.
-    // For login, we can mark as verified.
     
     res.status(200).json({
       success: true,
@@ -98,55 +113,108 @@ exports.register = async (req, res, next) => {
     }
 
     // Check if user exists
-    let user = await User.findOne({ username });
-    if (user) {
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .single();
+
+    if (existingUser) {
       return res.status(400).json({ message: 'Username already taken' });
     }
 
-    // Create user
-    user = await User.create({
-      username,
-      name,
-      email,
-      password,
-      phone,
-      isVerified: true, // Auto-verify for now as per user request for username/pass
-    });
+    if (email) {
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
 
-    sendTokenResponse(user, 201, res);
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({
+        username,
+        name,
+        email,
+        password: hashedPassword,
+        phone,
+        is_verified: true,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    sendTokenResponse(newUser, 201, res);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// @desc    Login user with username or email and password
+// @desc    Login user with username, name, or email and password
 // @route   POST /api/auth/login
 // @access  Public
 exports.login = async (req, res, next) => {
   try {
-    const { username, password } = req.body; // 'username' field on frontend can be email or username
+    const identifier = (req.body.identifier || req.body.username || req.body.email || '').trim();
+    const { password } = req.body;
 
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Username/Email and password are required' });
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'Username/Name/Email and password are required' });
     }
 
-    // Find User by username OR email (case-insensitive) and include password
-    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-    const q = {
-      $or: [
-        { username: new RegExp('^' + escapeRegex(username) + '$', 'i') },
-        { email: new RegExp('^' + escapeRegex(username) + '$', 'i') }
-      ]
-    };
+    let user = null;
+    const normalizedPhone = identifier.replace(/\D/g, '');
 
-    const user = await User.findOne(q).select('+password');
+    // Try exact identifier matches first
+    const searchFields = [
+      { field: 'username', value: identifier },
+      { field: 'email', value: identifier },
+      { field: 'phone', value: normalizedPhone }
+    ];
+
+    for (const { field, value } of searchFields) {
+      if (!value) continue;
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq(field, value)
+        .maybeSingle();
+
+      if (!error && data) {
+        user = data;
+        break;
+      }
+    }
+
+    if (!user) {
+      const { data: nameMatch, error } = await supabase
+        .from('users')
+        .select('*')
+        .ilike('name', `%${identifier}%`)
+        .maybeSingle();
+
+      if (!error && nameMatch) {
+        user = nameMatch;
+      }
+    }
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Check password
-    const isMatch = await user.matchPassword(password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -167,7 +235,13 @@ exports.login = async (req, res, next) => {
 // @access  Private/Admin
 exports.getUsers = async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
     res.status(200).json({
       success: true,
       count: users.length,
@@ -183,19 +257,29 @@ exports.getUsers = async (req, res) => {
 // @access  Private/Admin
 exports.toggleBlockUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const { data: user, error: findError } = await supabase
+      .from('users')
+      .select('blocked')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!user) {
+    if (findError || !user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    user.blocked = !user.blocked;
-    await user.save();
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ blocked: !user.blocked })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
 
     res.status(200).json({
       success: true,
-      data: user,
-      message: `User ${user.blocked ? 'blocked' : 'unblocked'} successfully`
+      data: updatedUser,
+      message: `User ${updatedUser.blocked ? 'blocked' : 'unblocked'} successfully`
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -208,7 +292,14 @@ exports.toggleBlockUser = async (req, res) => {
 // @access  Private
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error) throw error;
+
     res.status(200).json({
       success: true,
       data: user,
@@ -228,10 +319,14 @@ exports.updateDetails = async (req, res, next) => {
       email: req.body.email,
     };
 
-    const user = await User.findByIdAndUpdate(req.user.id, fieldsToUpdate, {
-      new: true,
-      runValidators: true,
-    });
+    const { data: user, error } = await supabase
+      .from('users')
+      .update(fieldsToUpdate)
+      .eq('id', req.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -253,20 +348,31 @@ exports.resetPassword = async (req, res, next) => {
       return res.status(400).json({ message: 'Phone number, new password and OTP are required' });
     }
 
-    const user = await User.findOne({
-      phone: phoneNumber,
-      otp,
-      otpExpire: { $gt: Date.now() }
-    });
+    const { data: user, error: findError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('phone', phoneNumber)
+      .eq('otp', otp)
+      .gt('otp_expire', new Date().toISOString())
+      .single();
 
-    if (!user) {
+    if (findError || !user) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    user.password = password;
-    user.otp = undefined;
-    user.otpExpire = undefined;
-    await user.save();
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        password: hashedPassword,
+        otp: null,
+        otp_expire: null
+      })
+      .eq('id', user.id);
+
+    if (updateError) throw updateError;
 
     res.status(200).json({
       success: true,
@@ -280,7 +386,7 @@ exports.resetPassword = async (req, res, next) => {
 // Get token from model, create cookie and send response
 const sendTokenResponse = (user, statusCode, res) => {
   // Create token
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 
@@ -288,11 +394,12 @@ const sendTokenResponse = (user, statusCode, res) => {
     success: true,
     token,
     user: {
-      id: user._id,
+      id: user.id,
+      username: user.username,
       name: user.name,
       email: user.email,
       role: user.role,
-      isVerified: user.isVerified,
+      isVerified: user.is_verified,
       avatar: user.avatar,
       phone: user.phone
     },

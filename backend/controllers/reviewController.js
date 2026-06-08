@@ -1,12 +1,17 @@
-const Review = require('../models/Review')
-const Product = require('../models/Product')
+const supabase = require('../config/supabase');
 
 // @desc    Get reviews for a product
 // @route   GET /api/reviews/product/:productId
 // @access  Public
 exports.getReviewsByProduct = async (req, res, next) => {
   try {
-    const reviews = await Review.find({ product: req.params.productId }).populate('user', 'name')
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('*, user:user_id(name)')
+      .eq('product_id', req.params.productId);
+
+    if (error) throw error;
+
     res.status(200).json({ success: true, count: reviews.length, data: reviews })
   } catch (err) {
     next(err)
@@ -18,23 +23,46 @@ exports.getReviewsByProduct = async (req, res, next) => {
 // @access  Private
 exports.addReview = async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.productId)
-    if (!product) {
+    const { data: product, error: findError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('id', req.params.productId)
+      .single();
+
+    if (findError || !product) {
       return res.status(404).json({ message: 'Product not found' })
     }
 
-    const { rating, comment } = req.body
-    const review = await Review.create({
-      product: product._id,
-      user: req.user._id,
-      rating: Number(rating),
-      comment,
-    })
+    const { rating, comment, title } = req.body
+    const { data: review, error: insertError } = await supabase
+      .from('reviews')
+      .insert({
+        product_id: product.id,
+        user_id: req.user.id,
+        rating: Number(rating),
+        text: comment || req.body.text, // Supporting both comment and text
+        title: title || 'Product Review',
+      })
+      .select()
+      .single();
 
-    const reviews = await Review.find({ product: product._id })
-    product.reviewCount = reviews.length
-    product.rating = reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length
-    await product.save()
+    if (insertError) throw insertError;
+
+    // Update product rating and count
+    const { data: reviews, error: fetchError } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('product_id', product.id);
+
+    if (!fetchError) {
+      const numReviews = reviews.length;
+      const avgRating = reviews.reduce((sum, item) => sum + item.rating, 0) / numReviews;
+
+      await supabase
+        .from('products')
+        .update({ num_reviews: numReviews, rating: avgRating })
+        .eq('id', product.id);
+    }
 
     res.status(201).json({ success: true, data: review })
   } catch (err) {
@@ -47,7 +75,13 @@ exports.addReview = async (req, res, next) => {
 // @access  Private
 exports.getMyReviews = async (req, res, next) => {
   try {
-    const reviews = await Review.find({ user: req.user._id }).populate('product', 'name images')
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('*, product:product_id(name, images)')
+      .eq('user_id', req.user.id);
+
+    if (error) throw error;
+
     res.status(200).json({ success: true, count: reviews.length, data: reviews })
   } catch (err) {
     next(err)
@@ -59,26 +93,42 @@ exports.getMyReviews = async (req, res, next) => {
 // @access  Private
 exports.deleteReview = async (req, res, next) => {
   try {
-    const review = await Review.findById(req.params.id)
+    const { data: review, error: findError } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!review) {
+    if (findError || !review) {
       return res.status(404).json({ message: 'Review not found' })
     }
 
     // Make sure review belongs to user or user is admin
-    if (review.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+    if (review.user_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(401).json({ message: 'Not authorized to delete this review' })
     }
 
-    await review.deleteOne()
+    const { error: deleteError } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (deleteError) throw deleteError;
 
     // Update product rating
-    const product = await Product.findById(review.product)
-    if (product) {
-      const reviews = await Review.find({ product: product._id })
-      product.reviewCount = reviews.length
-      product.rating = reviews.length > 0 ? reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length : 0
-      await product.save()
+    const { data: reviews, error: fetchError } = await supabase
+      .from('reviews')
+      .select('rating')
+      .eq('product_id', review.product_id);
+
+    if (!fetchError) {
+      const numReviews = reviews.length;
+      const avgRating = numReviews > 0 ? reviews.reduce((sum, item) => sum + item.rating, 0) / numReviews : 0;
+
+      await supabase
+        .from('products')
+        .update({ num_reviews: numReviews, rating: avgRating })
+        .eq('id', review.product_id);
     }
 
     res.status(200).json({ success: true, data: {} })

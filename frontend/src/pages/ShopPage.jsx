@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Filter, 
   Search, 
@@ -32,6 +32,7 @@ const ShopPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchParams] = useSearchParams();
   
+  const navigate = useNavigate();
   const { addToCart } = useCart();
   const { createToast } = useToast();
   const { toggleWishlist, isInWishlist } = useWishlist();
@@ -58,7 +59,7 @@ const ShopPage = () => {
 
   const fetchCategories = async () => {
     try {
-      const res = await axios.get('/api/categories');
+      const res = await api.get('/categories');
       setCategories(res.data.data);
     } catch (err) {
       console.error(err);
@@ -69,7 +70,7 @@ const ShopPage = () => {
     try {
       setLoading(true);
       
-      let url = `/api/products?sort=${sortBy}`;
+      let url = `/products?sort=${sortBy}`;
       if (priceRange[0] !== 0 || priceRange[1] !== 1000) {
         url += `&price[gte]=${priceRange[0]}&price[lte]=${priceRange[1]}`;
       }
@@ -78,7 +79,7 @@ const ShopPage = () => {
       
       if (search) {
         // If there's a search term, we use the specific search API to leverage text indexing
-        const searchRes = await axios.get(`/api/products/search?q=${encodeURIComponent(search)}`);
+        const searchRes = await api.get(`/products/search?q=${encodeURIComponent(search)}`);
         
         // Filter the search results locally based on the other criteria
         let filtered = searchRes.data.data;
@@ -98,7 +99,7 @@ const ShopPage = () => {
         
         setProducts(filtered);
       } else {
-        const res = await axios.get(url);
+        const res = await api.get(url);
         setProducts(res.data.data);
       }
     } catch (err) {
@@ -117,6 +118,7 @@ const ShopPage = () => {
     const res = await addToCart(product._id, 1);
     if (res?.success) {
       createToast(`${product.name} added to cart!`);
+      navigate('/cart');
     } else {
       createToast(res?.message || 'Failed to add to cart. Please login.', 'error');
     }

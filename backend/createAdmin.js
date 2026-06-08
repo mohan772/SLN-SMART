@@ -1,37 +1,50 @@
-const mongoose = require('mongoose');
-const User = require('./models/User');
+const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
+const supabase = require('./config/supabase');
 
 dotenv.config({ path: './.env' });
 
 const setupAdmin = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    
     // Check if user exists
-    let user = await User.findOne({ 
-      $or: [
-        { email: 'admin@sln.com' },
-        { username: 'admin' }
-      ]
-    });
-    
+    const { data: user, error: findError } = await supabase
+      .from('users')
+      .select('id')
+      .or('email.eq.admin@sln.com,username.eq.admin')
+      .maybeSingle();
+
     if (user) {
-      user.role = 'admin';
-      user.username = 'admin';
-      user.password = 'password123'; // Explicitly reset to ensure it matches
-      user.isVerified = true;
-      await user.save();
+      console.log('Admin already exists. Updating...');
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('password123', salt);
+      
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          role: 'admin',
+          password: hashedPassword,
+          is_verified: true
+        })
+        .eq('id', user.id);
+      
+      if (updateError) throw updateError;
       console.log('Admin user updated. Username: admin, Password: password123');
     } else {
-      user = await User.create({
-        username: 'admin',
-        name: 'Super Admin',
-        email: 'admin@sln.com',
-        password: 'password123',
-        role: 'admin',
-        isVerified: true
-      });
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('password123', salt);
+
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          username: 'admin',
+          name: 'Super Admin',
+          email: 'admin@sln.com',
+          password: hashedPassword,
+          role: 'admin',
+          is_verified: true
+        });
+
+      if (insertError) throw insertError;
       console.log('Created new admin user. Username: admin, Password: password123');
     }
     

@@ -12,6 +12,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import UserDashboard from './pages/UserDashboard';
 import CategoryProducts from './pages/CategoryProducts';
+import Cart from './pages/Cart';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Admin Pages
@@ -32,6 +33,14 @@ function App() {
         <Route path="/shop" element={<ShopPage />} />
         <Route path="/shop/category/:categorySlug" element={<CategoryProducts />} />
         <Route path="/product/:id" element={<ProductDetailsPage />} />
+        <Route 
+          path="/cart" 
+          element={
+            <ProtectedRoute>
+              <Cart />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />

@@ -1,89 +1,119 @@
-const Product = require('../models/Product');
-const Category = require('../models/Category');
+const supabase = require('../config/supabase');
+
+const normalizeQueryField = (key) => {
+  const map = {
+    featured: 'is_featured',
+    isFeatured: 'is_featured',
+    trending: 'trending',
+    seasonal: 'seasonal',
+    isOrganic: 'is_organic',
+    organic: 'is_organic',
+    category: 'category_id',
+    categoryId: 'category_id',
+    categorySlug: 'category_slug',
+    slug: 'category_slug',
+    visibility: 'visibility',
+    isDeleted: 'is_deleted',
+    deleted: 'is_deleted',
+  };
+  return map[key] || key;
+};
+
+const normalizeQueryValue = (key, val) => {
+  const booleanFields = ['is_featured', 'trending', 'seasonal', 'is_organic', 'visibility', 'is_deleted'];
+  if (booleanFields.includes(key) && typeof val === 'string') {
+    if (val.toLowerCase() === 'true') return true;
+    if (val.toLowerCase() === 'false') return false;
+  }
+  return val;
+};
+
+const normalizeSortField = (field) => {
+  const map = {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    categorySlug: 'category_slug',
+    isFeatured: 'is_featured',
+    isOrganic: 'is_organic',
+  };
+  return map[field] || field;
+};
+
+const parseSortOption = (sort) => {
+  if (!sort) {
+    return { field: 'created_at', ascending: false };
+  }
+
+  if (sort.startsWith('-')) {
+    return { field: normalizeSortField(sort.slice(1)), ascending: false };
+  }
+
+  const [field, order] = sort.split(':');
+  return {
+    field: normalizeSortField(field || 'created_at'),
+    ascending: order !== 'desc',
+  };
+};
 
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
 exports.getProducts = async (req, res, next) => {
   try {
-    let query;
+    const { select, sort, page, limit, search, ...filters } = req.query;
 
-    // Copy req.query
-    const reqQuery = { ...req.query };
+    let query = supabase
+      .from('products')
+      .select('*, category:category_id(*)', { count: 'exact' });
 
-    // Fields to exclude
-    const removeFields = ['select', 'sort', 'page', 'limit', 'search'];
+    // Hide soft deleted
+    query = query.eq('is_deleted', false);
 
-    // Loop over removeFields and delete them from reqQuery
-    removeFields.forEach((param) => delete reqQuery[param]);
+    // Apply filters
+    Object.keys(filters).forEach((key) => {
+      const val = filters[key];
+      const normalizedKey = normalizeQueryField(key);
+      const normalizedVal = normalizeQueryValue(normalizedKey, val);
 
-    // Create query string
-    let queryStr = JSON.stringify(reqQuery);
-
-    // Create operators ($gt, $gte, etc)
-    queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, (match) => `$${match}`);
-
-    const parsedQuery = JSON.parse(queryStr);
-    parsedQuery.isDeleted = { $ne: true }; // Hide soft deleted
-    
-    // Cast price to numbers
-    if (parsedQuery.price) {
-      if (parsedQuery.price.$gte) parsedQuery.price.$gte = Number(parsedQuery.price.$gte);
-      if (parsedQuery.price.$lte) parsedQuery.price.$lte = Number(parsedQuery.price.$lte);
-      if (parsedQuery.price.$gt) parsedQuery.price.$gt = Number(parsedQuery.price.$gt);
-      if (parsedQuery.price.$lt) parsedQuery.price.$lt = Number(parsedQuery.price.$lt);
-    }
-
-    // Finding resource
-    query = Product.find(parsedQuery).populate('category');
+      if (typeof normalizedVal === 'object' && normalizedVal !== null) {
+        if (normalizedVal.gt) query = query.gt(normalizedKey, normalizedVal.gt);
+        if (normalizedVal.gte) query = query.gte(normalizedKey, normalizedVal.gte);
+        if (normalizedVal.lt) query = query.lt(normalizedKey, normalizedVal.lt);
+        if (normalizedVal.lte) query = query.lte(normalizedKey, normalizedVal.lte);
+        if (normalizedVal.in) query = query.in(normalizedKey, normalizedVal.in.split(','));
+      } else {
+        query = query.eq(normalizedKey, normalizedVal);
+      }
+    });
 
     // Search
-    if (req.query.search) {
-      const search = req.query.search;
-      query = query.find({ name: { $regex: search, $options: 'i' } });
-    }
-
-    // Select Fields
-    if (req.query.select) {
-      const fields = req.query.select.split(',').join(' ');
-      query = query.select(fields);
+    if (search) {
+      query = query.ilike('name', `%${search}%`);
     }
 
     // Sort
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(',').join(' ');
-      query = query.sort(sortBy);
-    } else {
-      query = query.sort('-createdAt');
-    }
+    const sortOption = parseSortOption(sort);
+    query = query.order(sortOption.field, { ascending: sortOption.ascending });
 
     // Pagination
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 12;
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    const total = await Product.countDocuments(JSON.parse(queryStr));
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 12;
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
 
-    query = query.skip(startIndex).limit(limit);
+    query = query.range(from, to);
 
-    // Executing query
-    const products = await query;
+    const { data: products, error, count: total } = await query;
+
+    if (error) throw error;
 
     // Pagination result
     const pagination = {};
-
-    if (endIndex < total) {
-      pagination.next = {
-        page: page + 1,
-        limit,
-      };
+    if (to < total - 1) {
+      pagination.next = { page: pageNum + 1, limit: limitNum };
     }
-
-    if (startIndex > 0) {
-      pagination.prev = {
-        page: page - 1,
-        limit,
-      };
+    if (from > 0) {
+      pagination.prev = { page: pageNum - 1, limit: limitNum };
     }
 
     res.status(200).json({
@@ -103,9 +133,13 @@ exports.getProducts = async (req, res, next) => {
 // @access  Public
 exports.getProduct = async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.id).populate('category');
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('*, category:category_id(*)')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!product) {
+    if (error || !product) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
@@ -128,17 +162,14 @@ exports.searchProducts = async (req, res, next) => {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    // Combine text search and regex for better partial matching
-    const products = await Product.find({
-      isDeleted: { $ne: true },
-      $or: [
-        { $text: { $search: q } },
-        { name: { $regex: q, $options: 'i' } },
-        { categorySlug: { $regex: q, $options: 'i' } }
-      ]
-    })
-    .populate('category')
-    .limit(20);
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*, category:category_id(*)')
+      .eq('is_deleted', false)
+      .or(`name.ilike.%${q}%,category_slug.ilike.%${q}%`)
+      .limit(20);
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -163,21 +194,37 @@ exports.createProduct = async (req, res, next) => {
       productData.images = [`/uploads/${req.file.filename}`];
     }
 
-    // Parse boolean strings from form data
-    if (typeof productData.trending === 'string') productData.trending = productData.trending === 'true';
-    if (typeof productData.seasonal === 'string') productData.seasonal = productData.seasonal === 'true';
-    if (typeof productData.isOrganic === 'string') productData.isOrganic = productData.isOrganic === 'true';
-    if (typeof productData.visibility === 'string') productData.visibility = productData.visibility === 'true';
+    // Convert keys to snake_case to match SQL schema
+    const mappedData = {
+      name: productData.name,
+      description: productData.description,
+      price: productData.price,
+      discount_price: productData.discountPrice,
+      unit: productData.unit,
+      images: productData.images,
+      category_id: productData.category,
+      category_slug: productData.categorySlug,
+      stock: productData.stock,
+      rating: productData.rating,
+      num_reviews: productData.numReviews,
+      is_featured: String(productData.isFeatured) === 'true',
+      is_organic: String(productData.isOrganic) === 'true',
+      nutritional_info: typeof productData.nutritionalInfo === 'string' ? JSON.parse(productData.nutritionalInfo) : productData.nutritionalInfo,
+      farmer_details: typeof productData.farmerDetails === 'string' ? JSON.parse(productData.farmerDetails) : productData.farmerDetails,
+      trending: String(productData.trending) === 'true',
+      seasonal: String(productData.seasonal) === 'true',
+      demand_level: productData.demandLevel,
+      visibility: String(productData.visibility) === 'true',
+      supplier: typeof productData.supplier === 'string' ? JSON.parse(productData.supplier) : productData.supplier,
+    };
 
-    // Parse nested objects
-    if (typeof productData.nutritionalInfo === 'string') {
-      try { productData.nutritionalInfo = JSON.parse(productData.nutritionalInfo); } catch(e) {}
-    }
-    if (typeof productData.supplier === 'string') {
-      try { productData.supplier = JSON.parse(productData.supplier); } catch(e) {}
-    }
+    const { data: product, error } = await supabase
+      .from('products')
+      .insert(mappedData)
+      .select()
+      .single();
 
-    const product = await Product.create(productData);
+    if (error) throw error;
 
     res.status(201).json({
       success: true,
@@ -193,12 +240,6 @@ exports.createProduct = async (req, res, next) => {
 // @access  Private/Admin
 exports.updateProduct = async (req, res, next) => {
   try {
-    let product = await Product.findById(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
     let productData = { ...req.body };
     if (req.files && req.files.length > 0) {
       productData.images = req.files.map(file => `/uploads/${file.filename}`);
@@ -206,28 +247,50 @@ exports.updateProduct = async (req, res, next) => {
       productData.images = [`/uploads/${req.file.filename}`];
     }
 
-    if (typeof productData.trending === 'string') productData.trending = productData.trending === 'true';
-    if (typeof productData.seasonal === 'string') productData.seasonal = productData.seasonal === 'true';
-    if (typeof productData.isOrganic === 'string') productData.isOrganic = productData.isOrganic === 'true';
-    if (typeof productData.visibility === 'string') productData.visibility = productData.visibility === 'true';
-    if (productData.isDeleted === 'false') productData.isDeleted = false;
-    if (productData.isDeleted === 'true') productData.isDeleted = true;
+    const mappedData = {};
+    if (productData.name) mappedData.name = productData.name;
+    if (productData.description) mappedData.description = productData.description;
+    if (productData.price) mappedData.price = productData.price;
+    if (productData.discountPrice) mappedData.discount_price = productData.discountPrice;
+    if (productData.unit) mappedData.unit = productData.unit;
+    if (productData.images) mappedData.images = productData.images;
+    if (productData.category) mappedData.category_id = productData.category;
+    if (productData.categorySlug) mappedData.category_slug = productData.categorySlug;
+    if (productData.stock) mappedData.stock = productData.stock;
+    if (productData.rating) mappedData.rating = productData.rating;
+    if (productData.numReviews) mappedData.num_reviews = productData.numReviews;
+    if (productData.isFeatured !== undefined) mappedData.is_featured = String(productData.isFeatured) === 'true';
+    if (productData.isOrganic !== undefined) mappedData.is_organic = String(productData.isOrganic) === 'true';
+    if (productData.trending !== undefined) mappedData.trending = String(productData.trending) === 'true';
+    if (productData.seasonal !== undefined) mappedData.seasonal = String(productData.seasonal) === 'true';
+    if (productData.demandLevel) mappedData.demand_level = productData.demandLevel;
+    if (productData.visibility !== undefined) mappedData.visibility = String(productData.visibility) === 'true';
+    if (productData.isDeleted !== undefined) mappedData.is_deleted = String(productData.isDeleted) === 'true';
 
-    if (typeof productData.nutritionalInfo === 'string') {
-      try { productData.nutritionalInfo = JSON.parse(productData.nutritionalInfo); } catch(e) {}
+    if (productData.nutritionalInfo) {
+       mappedData.nutritional_info = typeof productData.nutritionalInfo === 'string' ? JSON.parse(productData.nutritionalInfo) : productData.nutritionalInfo;
     }
-    if (typeof productData.supplier === 'string') {
-      try { productData.supplier = JSON.parse(productData.supplier); } catch(e) {}
+    if (productData.farmerDetails) {
+       mappedData.farmer_details = typeof productData.farmerDetails === 'string' ? JSON.parse(productData.farmerDetails) : productData.farmerDetails;
+    }
+    if (productData.supplier) {
+       mappedData.supplier = typeof productData.supplier === 'string' ? JSON.parse(productData.supplier) : productData.supplier;
     }
 
-    product = await Product.findByIdAndUpdate(req.params.id, productData, {
-      new: true,
-      runValidators: true,
-    });
+    const { data: updatedProduct, error } = await supabase
+      .from('products')
+      .update(mappedData)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error || !updatedProduct) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
 
     res.status(200).json({
       success: true,
-      data: product,
+      data: updatedProduct,
     });
   } catch (err) {
     next(err);
@@ -239,15 +302,13 @@ exports.updateProduct = async (req, res, next) => {
 // @access  Private/Admin
 exports.deleteProduct = async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
     // Soft delete
-    product.isDeleted = true;
-    await product.save();
+    const { error } = await supabase
+      .from('products')
+      .update({ is_deleted: true })
+      .eq('id', req.params.id);
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
@@ -264,57 +325,51 @@ exports.deleteProduct = async (req, res, next) => {
 exports.getProductsByCategory = async (req, res, next) => {
   try {
     const { slug } = req.params;
-    
-    // Copy req.query for filters
-    const reqQuery = { ...req.query };
-    
-    // Fields to exclude
-    const removeFields = ['select', 'sort', 'page', 'limit', 'search'];
-    removeFields.forEach((param) => delete reqQuery[param]);
-    
-    let queryStr = JSON.stringify(reqQuery);
-    queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, (match) => `$${match}`);
-    const parsedQuery = JSON.parse(queryStr);
-    parsedQuery.isDeleted = { $ne: true };
-    
-    // Cast price to numbers
-    if (parsedQuery.price) {
-      if (parsedQuery.price.$gte) parsedQuery.price.$gte = Number(parsedQuery.price.$gte);
-      if (parsedQuery.price.$lte) parsedQuery.price.$lte = Number(parsedQuery.price.$lte);
-      if (parsedQuery.price.$gt) parsedQuery.price.$gt = Number(parsedQuery.price.$gt);
-      if (parsedQuery.price.$lt) parsedQuery.price.$lt = Number(parsedQuery.price.$lt);
-    }
-    
-    // Add categorySlug to query
-    parsedQuery.categorySlug = slug;
+    const { select, sort, page, limit, ...filters } = req.query;
 
-    let query = Product.find(parsedQuery).populate('category');
+    let query = supabase
+      .from('products')
+      .select('*, category:category_id(*)', { count: 'exact' });
+
+    query = query.eq('is_deleted', false).eq('category_slug', slug);
+
+    // Apply filters
+    Object.keys(filters).forEach((key) => {
+      const val = filters[key];
+      const normalizedKey = normalizeQueryField(key);
+      const normalizedVal = normalizeQueryValue(normalizedKey, val);
+      if (typeof normalizedVal === 'object' && normalizedVal !== null) {
+        if (normalizedVal.gt) query = query.gt(normalizedKey, normalizedVal.gt);
+        if (normalizedVal.gte) query = query.gte(normalizedKey, normalizedVal.gte);
+        if (normalizedVal.lt) query = query.lt(normalizedKey, normalizedVal.lt);
+        if (normalizedVal.lte) query = query.lte(normalizedKey, normalizedVal.lte);
+      } else {
+        query = query.eq(normalizedKey, normalizedVal);
+      }
+    });
 
     // Sort
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(',').join(' ');
-      query = query.sort(sortBy);
-    } else {
-      query = query.sort('-createdAt');
-    }
+    const sortOption = parseSortOption(sort);
+    query = query.order(sortOption.field, { ascending: sortOption.ascending });
 
     // Pagination
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 12;
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-    
-    const total = await Product.countDocuments(parsedQuery);
-    query = query.skip(startIndex).limit(limit);
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 12;
+    const from = (pageNum - 1) * limitNum;
+    const to = from + limitNum - 1;
 
-    const products = await query;
+    query = query.range(from, to);
+
+    const { data: products, error, count: total } = await query;
+
+    if (error) throw error;
     
     const pagination = {};
-    if (endIndex < total) {
-      pagination.next = { page: page + 1, limit };
+    if (to < total - 1) {
+      pagination.next = { page: pageNum + 1, limit: limitNum };
     }
-    if (startIndex > 0) {
-      pagination.prev = { page: page - 1, limit };
+    if (from > 0) {
+      pagination.prev = { page: pageNum - 1, limit: limitNum };
     }
 
     res.status(200).json({

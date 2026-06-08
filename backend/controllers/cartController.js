@@ -1,20 +1,20 @@
-const Cart = require('../models/Cart');
-const Product = require('../models/Product');
+const supabase = require('../config/supabase');
 
 // @desc    Get logged in user cart
 // @route   GET /api/cart
 // @access  Private
 exports.getCart = async (req, res, next) => {
   try {
-    let cart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+    const { data: items, error } = await supabase
+      .from('cart_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
 
-    if (!cart) {
-      cart = await Cart.create({ user: req.user.id, items: [] });
-    }
+    if (error) throw error;
 
     res.status(200).json({
       success: true,
-      data: cart,
+      data: { items: items || [] },
     });
   } catch (err) {
     next(err);
@@ -28,30 +28,38 @@ exports.addToCart = async (req, res, next) => {
   try {
     const { productId, quantity } = req.body;
 
-    let cart = await Cart.findOne({ user: req.user.id });
+    const { data: existingItem, error: findError } = await supabase
+      .from('cart_items')
+      .select('id, quantity')
+      .eq('user_id', req.user.id)
+      .eq('product_id', productId)
+      .single();
 
-    if (!cart) {
-      cart = await Cart.create({ user: req.user.id, items: [] });
-    }
-
-    const productIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId
-    );
-
-    if (productIndex > -1) {
-      // Product exists in cart, update quantity
-      cart.items[productIndex].quantity += quantity;
+    if (existingItem) {
+      // Update quantity
+      const { error: updateError } = await supabase
+        .from('cart_items')
+        .update({ quantity: existingItem.quantity + (quantity || 1) })
+        .eq('id', existingItem.id);
+      if (updateError) throw updateError;
     } else {
-      // Product does not exist in cart, add new item
-      cart.items.push({ product: productId, quantity });
+      // Insert new item
+      const { error: insertError } = await supabase
+        .from('cart_items')
+        .insert({ user_id: req.user.id, product_id: productId, quantity: quantity || 1 });
+      if (insertError) throw insertError;
     }
 
-    await cart.save();
-    cart = await cart.populate('items.product');
+    const { data: items, error: fetchError } = await supabase
+      .from('cart_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
+
+    if (fetchError) throw fetchError;
 
     res.status(200).json({
       success: true,
-      data: cart,
+      data: { items: items || [] },
     });
   } catch (err) {
     next(err);
@@ -64,29 +72,33 @@ exports.addToCart = async (req, res, next) => {
 exports.updateCartItem = async (req, res, next) => {
   try {
     const { quantity } = req.body;
-    const cart = await Cart.findOne({ user: req.user.id });
-
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
+    
+    if (quantity <= 0) {
+      const { error } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('user_id', req.user.id)
+        .eq('product_id', req.params.productId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('cart_items')
+        .update({ quantity })
+        .eq('user_id', req.user.id)
+        .eq('product_id', req.params.productId);
+      if (error) throw error;
     }
 
-    const productIndex = cart.items.findIndex(
-      (item) => item.product.toString() === req.params.productId
-    );
+    const { data: items, error: fetchError } = await supabase
+      .from('cart_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
 
-    if (productIndex > -1) {
-      cart.items[productIndex].quantity = quantity;
-      if (quantity <= 0) {
-        cart.items.splice(productIndex, 1);
-      }
-      await cart.save();
-    }
-
-    const updatedCart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+    if (fetchError) throw fetchError;
 
     res.status(200).json({
       success: true,
-      data: updatedCart,
+      data: { items: items || [] },
     });
   } catch (err) {
     next(err);
@@ -98,22 +110,24 @@ exports.updateCartItem = async (req, res, next) => {
 // @access  Private
 exports.removeFromCart = async (req, res, next) => {
   try {
-    const cart = await Cart.findOne({ user: req.user.id });
+    const { error } = await supabase
+      .from('cart_items')
+      .delete()
+      .eq('user_id', req.user.id)
+      .eq('product_id', req.params.productId);
 
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' });
-    }
+    if (error) throw error;
 
-    cart.items = cart.items.filter(
-      (item) => item.product.toString() !== req.params.productId
-    );
+    const { data: items, error: fetchError } = await supabase
+      .from('cart_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
 
-    await cart.save();
-    const updatedCart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+    if (fetchError) throw fetchError;
 
     res.status(200).json({
       success: true,
-      data: updatedCart,
+      data: { items: items || [] },
     });
   } catch (err) {
     next(err);

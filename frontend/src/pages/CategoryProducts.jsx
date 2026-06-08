@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Filter, 
@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   ChevronRight
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { formatINR } from '../utils/currency';
@@ -26,6 +27,7 @@ const CategoryProducts = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
+  const navigate = useNavigate();
   
   const { addToCart } = useCart();
   const { createToast } = useToast();
@@ -44,9 +46,9 @@ const CategoryProducts = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      let url = `/api/products/category/${categorySlug}?sort=${sortBy}`;
+      let url = `/products/category/${categorySlug}?sort=${sortBy}`;
       
-      const res = await axios.get(url);
+      const res = await api.get(url);
       setProducts(res.data.data);
       
       // If we have products, extract category info from the first product
@@ -69,6 +71,7 @@ const CategoryProducts = () => {
     const res = await addToCart(product._id, 1);
     if (res?.success) {
       createToast(`${product.name} added to cart!`);
+      navigate('/cart');
     } else {
       createToast(res?.message || 'Failed to add to cart. Please login.', 'error');
     }

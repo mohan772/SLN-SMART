@@ -45,12 +45,29 @@ const Home = () => {
       try {
         const [featuredRes, trendingRes, categoriesRes] = await Promise.all([
           api.get('/products?featured=true&limit=8'),
-          api.get('/products/trending'),
+          api.get('/products?trending=true&limit=8'),
           api.get('/categories'),
         ])
-        setFeatured(featuredRes.data.data)
-        setTrending(trendingRes.data.data.slice(0, 8))
-        setCategories(categoriesRes.data.data)
+
+        const featuredItems = featuredRes.data.data || []
+        const trendingItems = trendingRes.data.data || []
+        const categoryItems = categoriesRes.data.data || []
+
+        if (featuredItems.length === 0) {
+          const backup = await api.get('/products?sort=rating:desc&limit=8')
+          setFeatured(backup.data.data || [])
+        } else {
+          setFeatured(featuredItems)
+        }
+
+        if (trendingItems.length === 0) {
+          const backup = await api.get('/products?sort=rating:desc&limit=8')
+          setTrending(backup.data.data || [])
+        } else {
+          setTrending(trendingItems)
+        }
+
+        setCategories(categoryItems)
       } catch (err) {
         console.error(err)
       } finally {

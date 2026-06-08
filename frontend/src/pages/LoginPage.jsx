@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { User, Lock, ArrowRight, Loader2 } from 'lucide-react';
 
 const LoginPage = () => {
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
   const { login, loading, error, setError } = useAuth();
@@ -13,11 +13,11 @@ const LoginPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!username || !password) {
+    if (!identifier || !password) {
       setError('Please enter both username and password');
       return;
     }
-    const res = await login(username, password);
+    const res = await login(identifier, password);
     if (res.success) navigate('/');
   };
 
@@ -47,7 +47,7 @@ const LoginPage = () => {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="block text-sm font-bold text-forest ml-1">Username</label>
+              <label className="block text-sm font-bold text-forest ml-1">Username / Name / Email</label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-olive">
                   <User size={18} />
@@ -56,9 +56,9 @@ const LoginPage = () => {
                   type="text"
                   required
                   className="w-full pl-12 pr-4 py-4 bg-soft-white border-2 border-beige rounded-2xl focus:border-gold outline-none transition-all font-medium"
-                  placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username, name, or email"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                 />
               </div>
             </div>

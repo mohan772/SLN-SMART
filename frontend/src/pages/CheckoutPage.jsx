@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Clock, Truck, Lock, ArrowLeft } from 'lucide-react';
-import { toast } from 'react-toastify';
-import axios from 'axios';
+import api from '../services/api';
+import { useCart } from '../context/CartContext';
+import { useToast } from '../context/ToastContext';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
+  const { createToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [cart, setCart] = useState([]);
+  const { cart, clearCart, loading: cartLoading } = useCart();
   const [deliveryAddress, setDeliveryAddress] = useState({
     address: '',
     city: '',
@@ -22,12 +24,17 @@ const CheckoutPage = () => {
   const [couponDiscount, setCouponDiscount] = useState(0);
 
   useEffect(() => {
-    const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCart(savedCart);
+    // Cart is loaded from the backend cart context for logged in users.
   }, []);
 
+  const cartItems = cart.items || [];
   const calculatePrices = () => {
-    const itemsPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const validItems = cartItems.filter(item => item.product_id || item.product?.id || item.product?._id);
+    const itemsPrice = validItems.reduce((sum, item) => {
+      const productData = item.product || {};
+      const price = productData.discount_price || productData.discountPrice || productData.price || 0;
+      return sum + price * item.quantity;
+    }, 0);
     const taxPrice = itemsPrice * 0.05;
     const shippingPrice = itemsPrice > 500 ? 0 : 50;
     const discountPrice = couponDiscount;
@@ -37,40 +44,68 @@ const CheckoutPage = () => {
 
   const applyCoupon = async () => {
     if (!couponCode) {
-      toast.error('Enter coupon code');
+      createToast('Enter coupon code', 'error');
       return;
     }
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/coupons/validate`,
-        { code: couponCode }
+      const token = localStorage.getItem('token');
+      const response = await api.post(
+        `/coupons/apply`,
+        { code: couponCode },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
       if (response.data.success) {
         setCouponDiscount(response.data.discount);
-        toast.success(`Coupon applied! Save ₹${response.data.discount}`);
+        createToast(`Coupon applied! Save ₹${response.data.discount}`, 'success');
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Invalid coupon');
+      createToast(error.response?.data?.message || 'Invalid coupon', 'error');
     }
   };
 
   const handleCheckout = async () => {
     if (!deliveryAddress.address || !deliveryAddress.city || !deliveryAddress.postalCode) {
-      toast.error('Please fill all delivery address fields');
+      createToast('Please fill all delivery address fields', 'error');
       return;
     }
     if (!deliverySlot) {
-      toast.error('Please select a delivery slot');
+      createToast('Please select a delivery slot');
       return;
+    }
+
+    const validItems = cartItems.filter(item => item.product_id || item.product?.id || item.product?._id);
+
+    if (validItems.length === 0) {
+      createToast('Your cart has no valid items. Please add items before checkout.', 'error');
+      setLoading(false);
+      return;
+    }
+
+    if (validItems.length < cartItems.length) {
+      createToast('Some items in your cart are no longer available and were skipped.', 'info');
     }
 
     setLoading(true);
     try {
       const { itemsPrice, taxPrice, shippingPrice, discountPrice, totalPrice } = calculatePrices();
-      const orderResponse = await axios.post(
-        `${import.meta.env.VITE_API_URL}/payment/create-order`,
+      const orderItems = validItems.map((item) => {
+        const productId = item.product_id || item.product?.id || item.product?._id;
+        const productData = item.product || {};
+        
+        return {
+          product: productId,
+          name: productData.name || 'Unknown Product',
+          image: (productData.images && productData.images[0]) || productData.image || '',
+          price: productData.discount_price || productData.discountPrice || productData.price || 0,
+          quantity: item.quantity,
+        };
+      });
+      const orderResponse = await api.post(
+        `/payment/create-order`,
         {
-          orderItems: cart,
+          orderItems,
           shippingAddress: deliveryAddress,
           paymentMethod,
           itemsPrice,
@@ -92,19 +127,32 @@ const CheckoutPage = () => {
         throw new Error(orderResponse.data.message);
       }
 
-      const { orderId, razorpayOrderId, razorpayKeyId, amount } = orderResponse.data;
+      const { orderId, razorpayOrderId, razorpayKeyId, amount, amountInPaise } = orderResponse.data;
+
+      if (paymentMethod === 'cod') {
+        await clearCart();
+        createToast('Order placed successfully!', 'success');
+        navigate(`/payment-success?orderId=${orderId}`);
+        return;
+      }
+
+      const razorpayAmount = amountInPaise ?? Math.round(amount * 100);
+
+      if (!window?.Razorpay) {
+        throw new Error('Payment gateway failed to load. Please refresh the page and try again.');
+      }
 
       const options = {
         key: razorpayKeyId,
-        amount: amount * 100,
+        amount: razorpayAmount,
         currency: 'INR',
         order_id: razorpayOrderId,
         name: 'SLN Smart Vegetable Shop',
         description: 'Premium Grocery Delivery',
         handler: async (response) => {
           try {
-            const verifyResponse = await axios.post(
-              `${import.meta.env.VITE_API_URL}/payment/verify-payment`,
+            const verifyResponse = await api.post(
+              `/payment/verify-payment`,
               {
                 orderId,
                 razorpayPaymentId: response.razorpay_payment_id,
@@ -118,11 +166,11 @@ const CheckoutPage = () => {
             );
 
             if (verifyResponse.data.success) {
-              localStorage.removeItem('cart');
+              await clearCart();
               navigate(`/payment-success?orderId=${orderId}`);
             }
           } catch (error) {
-            toast.error('Payment verification failed');
+            createToast('Payment verification failed', 'error');
           }
         },
         theme: {
@@ -130,10 +178,18 @@ const CheckoutPage = () => {
         },
       };
 
-      const razorpay = new window.Razorpay(options);
+      const razorpay = new window.Razorpay({
+        ...options,
+        modal: {
+          ondismiss: () => {
+            setLoading(false);
+            createToast('Payment window closed. You can try again.', 'info');
+          },
+        },
+      });
       razorpay.open();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Checkout failed');
+      createToast(error.response?.data?.message || 'Checkout failed', 'error');
     } finally {
       setLoading(false);
     }
@@ -148,6 +204,33 @@ const CheckoutPage = () => {
     'Tomorrow 12-2 PM',
     'Tomorrow 2-4 PM',
   ];
+
+  if (cartLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-soft-white px-4">
+        <div className="flex items-center justify-center rounded-[2rem] bg-white border border-slate-200 p-12 text-center shadow-sm">
+          <div className="w-12 h-12 border-4 border-emerald-900 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-soft-white px-4">
+        <div className="max-w-xl w-full rounded-[2rem] bg-white border border-slate-200 p-12 text-center shadow-sm">
+          <h1 className="text-3xl font-semibold text-slate-900 mb-4">Your cart is empty</h1>
+          <p className="text-slate-600 mb-8">Add items to your cart before proceeding to checkout.</p>
+          <button
+            onClick={() => navigate('/shop')}
+            className="rounded-full bg-emerald-900 px-8 py-4 text-white font-semibold hover:bg-emerald-800 transition"
+          >
+            Browse Products
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50 to-slate-100">
@@ -287,14 +370,18 @@ const CheckoutPage = () => {
             >
               <h2 className="text-xl font-bold mb-6">Order Summary</h2>
               <div className="space-y-3 mb-6 max-h-48 overflow-y-auto">
-                {cart.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span>
-                      {item.name} <span className="opacity-75">x{item.quantity}</span>
-                    </span>
-                    <span>₹{(item.price * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
+                {cartItems.map((item) => {
+                  const productData = item.product || {};
+                  const price = productData.discount_price || productData.discountPrice || productData.price || 0;
+                  return (
+                    <div key={item.id || item.product?._id || item.product?.id} className="flex justify-between text-sm">
+                      <span>
+                        {productData.name || 'Item'} <span className="opacity-75">x{item.quantity}</span>
+                      </span>
+                      <span>₹{(price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  )
+                })}
               </div>
               <div className="border-t border-white/30 pt-4 space-y-3 mb-6">
                 <div className="flex justify-between">

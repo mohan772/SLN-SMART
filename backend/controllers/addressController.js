@@ -1,8 +1,16 @@
-const Address = require('../models/Address')
+const supabase = require('../config/supabase');
 
 exports.getAddresses = async (req, res, next) => {
   try {
-    const addresses = await Address.find({ user: req.user._id }).sort({ isDefault: -1, createdAt: -1 })
+    const { data: addresses, error } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
     res.status(200).json({ success: true, count: addresses.length, data: addresses })
   } catch (err) {
     next(err)
@@ -11,10 +19,24 @@ exports.getAddresses = async (req, res, next) => {
 
 exports.createAddress = async (req, res, next) => {
   try {
-    const address = await Address.create({ user: req.user._id, ...req.body })
-    if (address.isDefault) {
-      await Address.updateMany({ user: req.user._id, _id: { $ne: address._id } }, { isDefault: false })
+    const addressData = { user_id: req.user.id, ...req.body };
+    
+    const { data: address, error } = await supabase
+      .from('addresses')
+      .insert(addressData)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    if (address.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', req.user.id)
+        .neq('id', address.id);
     }
+
     res.status(201).json({ success: true, data: address })
   } catch (err) {
     next(err)
@@ -23,17 +45,26 @@ exports.createAddress = async (req, res, next) => {
 
 exports.updateAddress = async (req, res, next) => {
   try {
-    const address = await Address.findOneAndUpdate(
-      { _id: req.params.id, user: req.user._id },
-      req.body,
-      { new: true, runValidators: true },
-    )
-    if (!address) {
-      return res.status(404).json({ message: 'Address not found' })
+    const { data: address, error } = await supabase
+      .from('addresses')
+      .update(req.body)
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select()
+      .single();
+
+    if (error || !address) {
+      return res.status(404).json({ message: 'Address not found' });
     }
-    if (address.isDefault) {
-      await Address.updateMany({ user: req.user._id, _id: { $ne: address._id } }, { isDefault: false })
+
+    if (address.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', req.user.id)
+        .neq('id', address.id);
     }
+
     res.status(200).json({ success: true, data: address })
   } catch (err) {
     next(err)
@@ -42,10 +73,14 @@ exports.updateAddress = async (req, res, next) => {
 
 exports.deleteAddress = async (req, res, next) => {
   try {
-    const address = await Address.findOneAndDelete({ _id: req.params.id, user: req.user._id })
-    if (!address) {
-      return res.status(404).json({ message: 'Address not found' })
-    }
+    const { error } = await supabase
+      .from('addresses')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id);
+
+    if (error) throw error;
+
     res.status(200).json({ success: true, message: 'Address removed' })
   } catch (err) {
     next(err)

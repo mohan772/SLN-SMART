@@ -1,28 +1,38 @@
-const Order = require('../models/Order');
-const Product = require('../models/Product');
+const supabase = require('../config/supabase');
 
 // @desc    Get public site statistics
 // @route   GET /api/stats
 // @access  Public
 exports.getSiteStats = async (req, res, next) => {
   try {
-    const [happyCustomers, cityList, farmerNames, ordersDelivered, deliveredOrders] = await Promise.all([
-      Order.distinct('user'),
-      Order.distinct('shippingAddress.city'),
-      Product.distinct('farmerDetails.name', { 'farmerDetails.name': { $nin: [null, ''] } }),
-      Order.countDocuments({ status: 'Delivered' }),
-      Order.find({ status: 'Delivered', deliveredAt: { $exists: true } }, 'createdAt deliveredAt'),
+    const [
+      { data: allOrders },
+      { data: deliveredOrders },
+      { data: allProducts }
+    ] = await Promise.all([
+      supabase.from('orders').select('user_id, shipping_address'),
+      supabase.from('orders').select('created_at, delivered_at').eq('status', 'Delivered'),
+      supabase.from('products').select('farmer_details').not('is_deleted', 'eq', true)
     ]);
 
-    const citiesCovered = cityList.filter(Boolean).length;
-    const farmPartners = farmerNames.filter(Boolean).length;
-    const happyCustomersCount = happyCustomers.filter(Boolean).length;
+    // Happy Customers (Unique users)
+    const happyCustomersCount = allOrders ? new Set(allOrders.map(o => o.user_id)).size : 0;
+
+    // Cities Covered
+    const cities = allOrders ? new Set(allOrders.map(o => o.shipping_address?.city).filter(Boolean)) : new Set();
+    const citiesCovered = cities.size;
+
+    // Farm Partners
+    const farmers = allProducts ? new Set(allProducts.map(p => p.farmer_details?.name).filter(Boolean)) : new Set();
+    const farmPartners = farmers.size;
+
+    const ordersDelivered = deliveredOrders ? deliveredOrders.length : 0;
 
     let averageDeliveryTime = '45 min';
-    if (deliveredOrders.length > 0) {
+    if (deliveredOrders && deliveredOrders.length > 0) {
       const totalMinutes = deliveredOrders.reduce((sum, order) => {
-        const created = new Date(order.createdAt).getTime();
-        const delivered = new Date(order.deliveredAt).getTime();
+        const created = new Date(order.created_at).getTime();
+        const delivered = new Date(order.delivered_at).getTime();
         if (!created || !delivered || delivered <= created) {
           return sum;
         }

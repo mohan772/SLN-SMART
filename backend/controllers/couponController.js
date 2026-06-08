@@ -1,4 +1,4 @@
-const Coupon = require('../models/Coupon');
+const supabase = require('../config/supabase');
 
 // @desc    Apply coupon
 // @route   POST /api/coupons/apply
@@ -6,9 +6,15 @@ const Coupon = require('../models/Coupon');
 exports.applyCoupon = async (req, res, next) => {
   try {
     const { code } = req.body;
-    const coupon = await Coupon.findOne({ code, isActive: true, expireDate: { $gt: Date.now() } });
+    const { data: coupon, error } = await supabase
+      .from('coupons')
+      .select('code, discount')
+      .eq('code', code.toUpperCase())
+      .eq('is_active', true)
+      .gt('expire_date', new Date().toISOString())
+      .single();
 
-    if (!coupon) {
+    if (error || !coupon) {
       return res.status(400).json({ message: 'Invalid or expired coupon code' });
     }
 
@@ -29,7 +35,13 @@ exports.applyCoupon = async (req, res, next) => {
 // @access  Private/Admin
 exports.getCoupons = async (req, res, next) => {
   try {
-    const coupons = await Coupon.find();
+    const { data: coupons, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
     res.status(200).json({
       success: true,
       data: coupons,
@@ -44,7 +56,17 @@ exports.getCoupons = async (req, res, next) => {
 // @access  Private/Admin
 exports.createCoupon = async (req, res, next) => {
   try {
-    const coupon = await Coupon.create(req.body);
+    const { data: coupon, error } = await supabase
+      .from('coupons')
+      .insert({
+        ...req.body,
+        code: req.body.code.toUpperCase()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
     res.status(201).json({
       success: true,
       data: coupon,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Search, Package, Truck, CheckCircle, Clock, MapPin } from 'lucide-react';
 import SectionTitle from '../components/common/SectionTitle';
 import { formatINR } from '../utils/currency';
@@ -17,7 +17,7 @@ const OrderTracking = () => {
     try {
       setLoading(true);
       setError('');
-      const res = await axios.get(`/api/orders/${orderId}`);
+      const res = await api.get(`/orders/${orderId}`);
       setOrder(res.data.data);
     } catch (err) {
       setError('Order not found. Please check your Order ID and try again.');

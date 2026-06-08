@@ -3,7 +3,6 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const helmet = require('helmet');
-const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorMiddleware');
 
 // Load environment variables
@@ -57,12 +56,9 @@ app.use('/api/recently-viewed', recentlyViewed);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// MongoDB Connection
-connectDB();
-
 // Default Route
 app.get('/', (req, res) => {
-  res.send('SLN Produce Co. API is running...');
+  res.send('SLN Produce Co. API (Supabase) is running...');
 });
 
 // Port Configuration

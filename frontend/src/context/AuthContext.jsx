@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import axios from 'axios';
+import api, { setAuthToken } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isAuthenticated = !!user;
 
   useEffect(() => {
     const loadUser = async () => {
@@ -17,7 +18,8 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        const res = await axios.get('/api/auth/me', {
+        setAuthToken(token);
+      const res = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setUser(res.data.data);
@@ -38,7 +40,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      const res = await axios.post('/api/auth/send-otp', { phoneNumber });
+      const res = await api.post('/auth/send-otp', { phoneNumber });
       
       return { success: true, message: res.data.message };
     } catch (err) {
@@ -60,17 +62,18 @@ export const AuthProvider = ({ children }) => {
       const phoneNumber = userData.phoneNumber || userData.phone;
 
       const endpoint = action === 'register' 
-        ? '/api/auth/register' 
+        ? '/auth/register' 
         : action === 'reset-password'
-          ? '/api/auth/reset-password'
-          : '/api/auth/login';
+          ? '/auth/reset-password'
+          : '/auth/login';
       
       const payload = { ...userData, otp };
 
-      const res = await axios.post(endpoint, payload);
+      const res = await api.post(endpoint, payload);
       
       if (action !== 'reset-password') {
         localStorage.setItem('token', res.data.token);
+        setAuthToken(res.data.token);
         setUser(res.data.user);
       }
       
@@ -85,14 +88,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Simple Login with Username and Password
-  const login = async (username, password) => {
+  const login = async (identifier, password) => {
     try {
       setLoading(true);
       setError(null);
       
-      const res = await axios.post('/api/auth/login', { username, password });
-      
+const res = await api.post('/auth/login', { identifier, password });
+
       localStorage.setItem('token', res.data.token);
+      setAuthToken(res.data.token);
       setUser(res.data.user);
       
       return { success: true, data: res.data };
@@ -111,9 +115,10 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
-      const res = await axios.post('/api/auth/register', userData);
-      
+const res = await api.post('/auth/register', userData);
+
       localStorage.setItem('token', res.data.token);
+      setAuthToken(res.data.token);
       setUser(res.data.user);
       
       return { success: true, data: res.data };
@@ -129,6 +134,7 @@ export const AuthProvider = ({ children }) => {
   // Logout user
   const logout = () => {
     localStorage.removeItem('token');
+    setAuthToken(null);
     setUser(null);
   };
 
@@ -138,6 +144,7 @@ export const AuthProvider = ({ children }) => {
         user,
         loading,
         error,
+        isAuthenticated,
         logout,
         login,
         register,

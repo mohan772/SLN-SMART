@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, Download, ShoppingCart, Truck, MapPin } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 
 const PaymentSuccessPage = () => {
   const navigate = useNavigate();
@@ -15,8 +15,8 @@ const PaymentSuccessPage = () => {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const response = await axios.get(
-          `${import.meta.env.VITE_API_URL}/payment/${orderId}`,
+        const response = await api.get(
+          `/payment/${orderId}`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,

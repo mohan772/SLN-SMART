@@ -1,28 +1,34 @@
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const InventoryLog = require('../models/InventoryLog');
+const supabase = require('../config/supabase');
 
 // @desc    Get inventory analytics
 // @route   GET /api/inventory/analytics
 // @access  Private/Admin
 exports.getInventoryAnalytics = async (req, res, next) => {
   try {
-    const totalProducts = await Product.countDocuments({ isDeleted: { $ne: true } });
-    const lowStockProducts = await Product.find({ stock: { $lt: 20 }, isDeleted: { $ne: true } }).select('name stock price demandLevel unit images');
+    const { count: totalProducts } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_deleted', false);
+
+    const { data: lowStockProducts } = await supabase
+      .from('products')
+      .select('id, name, stock, price, demand_level, unit, images')
+      .eq('is_deleted', false)
+      .lt('stock', 20);
     
-    // Very simple revenue calculation
-    const orders = await Order.find({ status: { $nin: ['Cancelled', 'Refunded'] } });
-    let totalRevenue = 0;
-    orders.forEach(order => {
-        totalRevenue += order.totalPrice;
-    });
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('total_price')
+      .not('status', 'in', '("Cancelled","Refunded")');
+
+    const totalRevenue = orders ? orders.reduce((sum, order) => sum + Number(order.total_price), 0) : 0;
 
     res.status(200).json({
       success: true,
       data: {
-        totalProducts,
-        totalOrders: orders.length,
-        lowStockCount: lowStockProducts.length,
+        totalProducts: totalProducts || 0,
+        totalOrders: orders ? orders.length : 0,
+        lowStockCount: lowStockProducts ? lowStockProducts.length : 0,
         lowStockProducts,
         totalRevenue
       }
@@ -37,19 +43,23 @@ exports.getInventoryAnalytics = async (req, res, next) => {
 // @access  Private/Admin
 exports.getAutoPriceSuggestion = async (req, res, next) => {
   try {
-      const product = await Product.findById(req.params.id);
-      if(!product) return res.status(404).json({ message: 'Product not found' });
-      
-      // Simple Mocked Logic for Auto Suggestion
-      let suggestion = '';
-      let suggestedPrice = product.price;
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', req.params.id)
+        .single();
 
-      if (product.demandLevel === 'High') {
+      if(error || !product) return res.status(404).json({ message: 'Product not found' });
+      
+      let suggestion = '';
+      let suggestedPrice = Number(product.price);
+
+      if (product.demand_level === 'High') {
           suggestion = `${product.name} sales increased recently. Consider increasing the price by 15% to maximize profit.`;
-          suggestedPrice = +(product.price * 1.15).toFixed(2);
-      } else if (product.stock > 50 && product.demandLevel === 'Low') {
+          suggestedPrice = +(Number(product.price) * 1.15).toFixed(2);
+      } else if (product.stock > 50 && product.demand_level === 'Low') {
           suggestion = `Excess stock of ${product.name} with low demand. Add a discount to clear inventory.`;
-          suggestedPrice = +(product.price * 0.85).toFixed(2);
+          suggestedPrice = +(Number(product.price) * 0.85).toFixed(2);
       } else {
           suggestion = `${product.name} sales are stable. Current price is optimal.`;
       }
@@ -57,7 +67,7 @@ exports.getAutoPriceSuggestion = async (req, res, next) => {
       res.status(200).json({
           success: true,
           data: {
-              productId: product._id,
+              productId: product.id,
               currentPrice: product.price,
               suggestedPrice,
               suggestion
@@ -74,36 +84,50 @@ exports.getAutoPriceSuggestion = async (req, res, next) => {
 exports.restockProduct = async (req, res, next) => {
   try {
     const { quantity, reason } = req.body;
-    const product = await Product.findById(req.params.id);
+    
+    const { data: product, error: findError } = await supabase
+      .from('products')
+      .select('stock, visibility')
+      .eq('id', req.params.id)
+      .single();
 
-    if (!product) {
+    if (findError || !product) {
       return res.status(404).json({ message: 'Product not found' });
     }
 
     const previousStock = product.stock;
-    product.stock += Number(quantity);
+    const newStock = product.stock + Number(quantity);
     
-    // Auto-show product if stock becomes > 0
-    if (product.stock > 0 && !product.visibility) {
-      product.visibility = true;
-    }
+    const { data: updatedProduct, error: updateError } = await supabase
+      .from('products')
+      .update({ 
+        stock: newStock,
+        visibility: newStock > 0 ? true : product.visibility
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
 
-    await product.save();
+    if (updateError) throw updateError;
 
     // Log the change
-    const log = await InventoryLog.create({
-      product: product._id,
-      user: req.user._id,
-      changeType: 'Restock',
-      previousStock,
-      newStock: product.stock,
-      quantityChanged: Number(quantity),
-      reason: reason || 'Manual restock'
-    });
+    const { data: log, error: logError } = await supabase
+      .from('inventory_logs')
+      .insert({
+        product_id: req.params.id,
+        user_id: req.user.id,
+        change_type: 'Restock',
+        previous_stock: previousStock,
+        new_stock: newStock,
+        quantity_changed: Number(quantity),
+        reason: reason || 'Manual restock'
+      })
+      .select()
+      .single();
 
     res.status(200).json({
       success: true,
-      data: product,
+      data: updatedProduct,
       log
     });
   } catch (err) {
@@ -116,11 +140,13 @@ exports.restockProduct = async (req, res, next) => {
 // @access  Private/Admin
 exports.getInventoryLogs = async (req, res, next) => {
   try {
-    const logs = await InventoryLog.find()
-      .populate('product', 'name images')
-      .populate('user', 'name')
-      .sort('-createdAt')
+    const { data: logs, error } = await supabase
+      .from('inventory_logs')
+      .select('*, product:product_id(name, images), user:user_id(name)')
+      .order('created_at', { ascending: false })
       .limit(50);
+
+    if (error) throw error;
 
     res.status(200).json({
       success: true,

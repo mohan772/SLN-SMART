@@ -1,9 +1,15 @@
-const Wishlist = require('../models/Wishlist')
+const supabase = require('../config/supabase');
 
 exports.getWishlist = async (req, res, next) => {
   try {
-    const wishlist = await Wishlist.findOne({ user: req.user._id }).populate('items.product')
-    res.status(200).json({ success: true, data: wishlist || { items: [] } })
+    const { data: items, error } = await supabase
+      .from('wishlist_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
+
+    if (error) throw error;
+
+    res.status(200).json({ success: true, data: { items: items || [] } })
   } catch (err) {
     next(err)
   }
@@ -12,19 +18,31 @@ exports.getWishlist = async (req, res, next) => {
 exports.addToWishlist = async (req, res, next) => {
   try {
     const { productId } = req.body
-    let wishlist = await Wishlist.findOne({ user: req.user._id })
-    if (!wishlist) {
-      wishlist = await Wishlist.create({ user: req.user._id, items: [{ product: productId }] })
-      return res.status(201).json({ success: true, data: wishlist })
+    
+    // Check if exists
+    const { data: existing, error: findError } = await supabase
+      .from('wishlist_items')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('product_id', productId)
+      .single();
+
+    if (!existing) {
+      const { error: insertError } = await supabase
+        .from('wishlist_items')
+        .insert({ user_id: req.user.id, product_id: productId });
+      
+      if (insertError) throw insertError;
     }
 
-    const exists = wishlist.items.some((item) => item.product.toString() === productId)
-    if (!exists) {
-      wishlist.items.push({ product: productId })
-      await wishlist.save()
-    }
+    const { data: items, error: fetchError } = await supabase
+      .from('wishlist_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
 
-    res.status(200).json({ success: true, data: wishlist })
+    if (fetchError) throw fetchError;
+
+    res.status(200).json({ success: true, data: { items: items || [] } })
   } catch (err) {
     next(err)
   }
@@ -32,13 +50,22 @@ exports.addToWishlist = async (req, res, next) => {
 
 exports.removeFromWishlist = async (req, res, next) => {
   try {
-    const wishlist = await Wishlist.findOne({ user: req.user._id })
-    if (!wishlist) {
-      return res.status(404).json({ message: 'Wishlist not found' })
-    }
-    wishlist.items = wishlist.items.filter((item) => item.product.toString() !== req.params.productId)
-    await wishlist.save()
-    res.status(200).json({ success: true, data: wishlist })
+    const { error } = await supabase
+      .from('wishlist_items')
+      .delete()
+      .eq('user_id', req.user.id)
+      .eq('product_id', req.params.productId);
+
+    if (error) throw error;
+
+    const { data: items, error: fetchError } = await supabase
+      .from('wishlist_items')
+      .select('*, product:product_id(*)')
+      .eq('user_id', req.user.id);
+
+    if (fetchError) throw fetchError;
+
+    res.status(200).json({ success: true, data: { items: items || [] } })
   } catch (err) {
     next(err)
   }

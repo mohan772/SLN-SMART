@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../../services/api';
 import { Search, Mic, MicOff, X, Loader2, TrendingUp, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -65,7 +65,7 @@ const SearchBar = () => {
   const performSearch = async (searchTerm) => {
     try {
       setLoading(true);
-      const res = await axios.get(`/api/products/search?q=${encodeURIComponent(searchTerm)}`);
+      const res = await api.get(`/products/search?q=${encodeURIComponent(searchTerm)}`);
       setResults(res.data.data);
     } catch (error) {
       console.error('Search failed:', error);

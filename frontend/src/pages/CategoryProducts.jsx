@@ -26,12 +26,18 @@ const CategoryProducts = () => {
   const { categorySlug } = useParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
   const navigate = useNavigate();
   
   const { addToCart } = useCart();
   const { createToast } = useToast();
   
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
   const [sortBy, setSortBy] = useState('-createdAt');
   const [categoryDetails, setCategoryDetails] = useState({
     name: categorySlug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
@@ -40,16 +46,25 @@ const CategoryProducts = () => {
   });
 
   useEffect(() => {
-    fetchProducts();
+    setPage(1);
+    fetchProducts(1, true);
   }, [categorySlug, sortBy]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (pageNum = 1, isInitial = false) => {
     try {
-      setLoading(true);
-      let url = `/products/category/${categorySlug}?sort=${sortBy}`;
+      if (isInitial) setLoading(true);
+      else setLoadingMore(true);
+      
+      let url = `/products/category/${categorySlug}?sort=${sortBy}&page=${pageNum}&limit=12`;
       
       const res = await api.get(url);
-      setProducts(res.data.data);
+      if (isInitial) {
+        setProducts(res.data.data);
+      } else {
+        setProducts(prev => [...prev, ...res.data.data]);
+      }
+      setTotalProducts(res.data.total);
+      setHasMore(res.data.pagination && res.data.pagination.next);
       
       // If we have products, extract category info from the first product
       if (res.data.data.length > 0 && res.data.data[0].category) {
@@ -64,7 +79,14 @@ const CategoryProducts = () => {
       console.error(err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchProducts(nextPage);
   };
 
   const handleAddToCart = async (product) => {
@@ -254,9 +276,9 @@ const CategoryProducts = () => {
                 </motion.div>
               ))}
             </AnimatePresence>
-          </div>
-        ) : (
-          <div className="text-center py-24 bg-white rounded-3xl border border-beige/50">
+            </div>
+            ) : (
+            <div className="text-center py-24 bg-white rounded-3xl border border-beige/50">
               <div className="w-20 h-20 bg-soft-white rounded-full flex items-center justify-center mx-auto mb-6">
                 <Search size={32} className="text-olive" />
               </div>
@@ -265,9 +287,36 @@ const CategoryProducts = () => {
               <Link to="/shop" className="mt-6 inline-block text-gold font-bold hover:underline">
                 Return to Shop
               </Link>
-          </div>
-        )}
-      </div>
+            </div>
+            )}
+
+            {/* Load More Button */}
+            {hasMore && (
+            <div className="mt-12 text-center">
+            <button 
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="btn-premium px-10 py-4 text-lg disabled:opacity-50 flex items-center justify-center mx-auto space-x-2"
+            >
+              {loadingMore ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <>
+                  <span>Load More Products</span>
+                  <ArrowUpDown size={20} />
+                </>
+              )}
+            </button>
+            <p className="mt-4 text-sm text-olive">
+              Showing {products.length} of {totalProducts} products in {categoryDetails.name}
+            </p>
+            </div>
+            )}
+            </div>
+
     </div>
   );
 };

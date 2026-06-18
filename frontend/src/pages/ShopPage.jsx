@@ -28,6 +28,7 @@ const ShopPage = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
   const [searchParams] = useSearchParams();
@@ -38,6 +39,11 @@ const ShopPage = () => {
   const { toggleWishlist, isInWishlist } = useWishlist();
   const { toggleCompare, isInCompare } = useCompare();
   
+  // Pagination States
+  const [page, setPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+
   // Filter States
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -50,8 +56,9 @@ const ShopPage = () => {
   }, []);
 
   useEffect(() => {
+    setPage(1);
     const delayDebounceFn = setTimeout(() => {
-      fetchProducts();
+      fetchProducts(1, true);
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
@@ -66,11 +73,12 @@ const ShopPage = () => {
     }
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (pageNum = 1, isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
+      else setLoadingMore(true);
       
-      let url = `/products?sort=${sortBy}`;
+      let url = `/products?sort=${sortBy}&page=${pageNum}&limit=12`;
       if (priceRange[0] !== 0 || priceRange[1] !== 1000) {
         url += `&price[gte]=${priceRange[0]}&price[lte]=${priceRange[1]}`;
       }
@@ -98,15 +106,29 @@ const ShopPage = () => {
         });
         
         setProducts(filtered);
+        setHasMore(false);
       } else {
         const res = await api.get(url);
-        setProducts(res.data.data);
+        if (isInitial) {
+          setProducts(res.data.data);
+        } else {
+          setProducts(prev => [...prev, ...res.data.data]);
+        }
+        setTotalProducts(res.data.total);
+        setHasMore(res.data.pagination && res.data.pagination.next);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchProducts(nextPage);
   };
 
   const handleSearch = (e) => {
@@ -403,6 +425,32 @@ const ShopPage = () => {
                  >
                    Clear All Filters
                  </button>
+              </div>
+            )}
+
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="mt-12 text-center">
+                <button 
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="btn-premium px-10 py-4 text-lg disabled:opacity-50 flex items-center justify-center mx-auto space-x-2"
+                >
+                  {loadingMore ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Load More Products</span>
+                      <ArrowUpDown size={20} />
+                    </>
+                  )}
+                </button>
+                <p className="mt-4 text-sm text-olive">
+                  Showing {products.length} of {totalProducts} products
+                </p>
               </div>
             )}
           </main>

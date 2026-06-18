@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { Plus, Search, Edit2, Trash2, Eye, EyeOff, Filter } from 'lucide-react';
 import { formatINR } from '../../utils/currency';
 import ProductFormModal from '../../components/admin/ProductFormModal';
@@ -19,8 +19,8 @@ const ProductManagement = ({ categoryId, hideHeader }) => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const url = categoryId ? `/api/products?category=${categoryId}` : '/api/products';
-      const res = await axios.get(url);
+      const url = categoryId ? `/products?category=${categoryId}` : '/products';
+      const res = await api.get(url);
       setProducts(res.data.data);
     } catch (err) {
       console.error(err);
@@ -29,23 +29,10 @@ const ProductManagement = ({ categoryId, hideHeader }) => {
     }
   };
 
-  const handleAdd = () => {
-    setSelectedProduct(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (product) => {
-    setSelectedProduct(product);
-    setIsModalOpen(true);
-  };
-
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`/api/products/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await api.delete(`/products/${id}`);
         fetchProducts();
       } catch (err) {
         console.error(err);
@@ -56,11 +43,9 @@ const ProductManagement = ({ categoryId, hideHeader }) => {
   const handleToggleVisibility = async (product) => {
     if (!window.confirm(`Mark this product as ${product.visibility ? 'unavailable' : 'available'}?`)) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `/api/products/${product._id}`,
-        { visibility: !product.visibility },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await api.put(
+        `/products/${product._id}`,
+        { visibility: !product.visibility }
       );
       fetchProducts();
     } catch (err) {

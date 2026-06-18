@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { Plus, Edit2, Trash2, Image as ImageIcon, CheckCircle, XCircle, ArrowLeft } from 'lucide-react';
 import ProductManagement from './ProductManagement';
 
@@ -25,7 +25,7 @@ const CategoryManagement = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/categories');
+      const res = await api.get('/categories');
       setCategories(res.data.data);
       
       // Update selected category if it was updated
@@ -40,58 +40,16 @@ const CategoryManagement = () => {
     }
   };
 
-  const openAddCategory = () => {
-    setEditingCategory(null);
-    setFormData({ name: '', description: '', image: '', visibility: true });
-    setError(null);
-    setIsModalOpen(true);
-  };
-
-  const openEditCategory = (category, e) => {
-    if (e) e.stopPropagation();
-    setEditingCategory(category);
-    setFormData({
-      name: category.name || '',
-      description: category.description || '',
-      image: category.image || '',
-      visibility: category.visibility !== false,
-    });
-    setError(null);
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingCategory(null);
-    setError(null);
-  };
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      };
-
       if (editingCategory) {
-        await axios.put(`/api/categories/${editingCategory._id}`, formData, config);
+        await api.put(`/categories/${editingCategory._id}`, formData);
       } else {
-        await axios.post('/api/categories', formData, config);
+        await api.post('/categories', formData);
       }
 
       await fetchCategories();
@@ -108,10 +66,7 @@ const CategoryManagement = () => {
     if (e) e.stopPropagation();
     if (!window.confirm('Delete this category?')) return;
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/categories/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.delete(`/categories/${id}`);
       if (selectedCategory?._id === id) setSelectedCategory(null);
       fetchCategories();
     } catch (err) {
@@ -122,11 +77,9 @@ const CategoryManagement = () => {
   const handleToggleVisibility = async (category, e) => {
     if (e) e.stopPropagation();
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `/api/categories/${category._id}`,
-        { visibility: !category.visibility },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await api.put(
+        `/categories/${category._id}`,
+        { visibility: !category.visibility }
       );
       fetchCategories();
     } catch (err) {

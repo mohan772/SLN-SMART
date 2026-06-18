@@ -31,6 +31,7 @@ function App() {
       <Route element={<MainLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<ShopPage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/shop/category/:categorySlug" element={<CategoryProducts />} />
         <Route path="/product/:id" element={<ProductDetailsPage />} />
         <Route 

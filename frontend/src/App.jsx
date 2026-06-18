@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
+import CategoriesPage from './pages/CategoriesPage';
 import ProductDetailsPage from './pages/ProductDetailsPage';
 import CheckoutPage from './pages/CheckoutPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';

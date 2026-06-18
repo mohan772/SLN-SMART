@@ -27,6 +27,12 @@ const recentlyViewed = require('./routes/recentlyViewedRoutes');
 
 const app = express();
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 // Security Middleware
 app.use(helmet());
 

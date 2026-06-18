@@ -105,7 +105,12 @@ exports.getProducts = async (req, res, next) => {
 
     const { data: products, error, count: total } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase Error:', error);
+      throw error;
+    }
+
+    console.log(`Fetched ${products.length} records (Total: ${total})`);
 
     // Pagination result
     const pagination = {};
@@ -362,7 +367,12 @@ exports.getProductsByCategory = async (req, res, next) => {
 
     const { data: products, error, count: total } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase Error:', error);
+      throw error;
+    }
+
+    console.log(`Fetched ${products.length} records (Total: ${total})`);
     
     const pagination = {};
     if (to < total - 1) {

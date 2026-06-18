@@ -9,7 +9,12 @@ exports.getCategories = async (req, res, next) => {
       .from('categories')
       .select('*');
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase Error in getCategories:', error);
+      throw error;
+    }
+
+    console.log(`Successfully fetched ${categories.length} categories`);
 
     res.status(200).json({
       success: true,

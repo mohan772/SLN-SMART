@@ -21,7 +21,8 @@ npm install
 cp .env.example .env
 
 # Edit .env with your settings:
-# - MONGODB_URI (local or Atlas)
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_ROLE_KEY
 # - RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET
 # - JWT_SECRET
 # - EMAIL credentials (optional for local)
@@ -73,7 +74,8 @@ docker-compose up
 ## First Time Setup Checklist
 
 - [ ] Clone repository
-- [ ] Create MongoDB Atlas cluster (free tier)
+- [ ] Create Supabase project
+- [ ] Run `backend/scripts/supabase_schema.sql` in Supabase SQL Editor
 - [ ] Get Razorpay test keys from dashboard
 - [ ] Setup environment variables
 - [ ] Install dependencies
@@ -105,14 +107,13 @@ Password: password
 
 ## Common Issues & Solutions
 
-### MongoDB Connection Error
+### Supabase Connection Error
 ```
-Error: connect ECONNREFUSED
+Error: supabaseUrl is required.
 ```
 **Solution**: 
-- Check if MongoDB is running
-- Or use MongoDB Atlas connection string
-- Verify MONGODB_URI in .env
+- Check if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set in .env
+- Ensure the backend server is restarted after updating .env
 
 ### Razorpay Key Error
 ```

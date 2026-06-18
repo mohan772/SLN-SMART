@@ -42,15 +42,15 @@ A next-generation grocery ecommerce platform designed to compete with industry l
 ### Backend
 - **Runtime**: Node.js
 - **Framework**: Express.js
-- **Database**: MongoDB
-- **Authentication**: JWT
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: JWT & Supabase Auth
 - **Payment**: Razorpay
 - **Security**: Helmet.js
 - **Email**: Nodemailer
 
 ### Frontend
 - **Framework**: React 19
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS 4
 - **Animations**: Framer Motion
 - **HTTP Client**: Axios
 - **State Management**: Zustand/Context API
@@ -60,7 +60,7 @@ A next-generation grocery ecommerce platform designed to compete with industry l
 ### Infrastructure
 - **Frontend Hosting**: Vercel
 - **Backend Hosting**: Render
-- **Database**: MongoDB Atlas
+- **Database**: Supabase
 - **Image Storage**: Cloudinary
 - **Domain**: Custom domain support
 - **SSL/TLS**: Automatic HTTPS
@@ -71,7 +71,7 @@ A next-generation grocery ecommerce platform designed to compete with industry l
 - Node.js v18+
 - npm or yarn
 - Git
-- MongoDB Atlas account
+- Supabase project
 - Razorpay account
 
 ### Backend Setup
@@ -86,7 +86,8 @@ npm install
 cp .env.example .env
 
 # Add your configuration:
-# - MONGODB_URI
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_ROLE_KEY
 # - RAZORPAY_KEY_ID
 # - RAZORPAY_KEY_SECRET
 # - JWT_SECRET
@@ -130,7 +131,8 @@ npm run preview
 ```
 PORT=5000
 NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/sln-grocery
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRE=7d
 RAZORPAY_KEY_ID=your_razorpay_key

@@ -56,9 +56,11 @@ app.use('/api/recently-viewed', recentlyViewed);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Default Route
-app.get('/', (req, res) => {
-  res.send('SLN Produce Co. API (Supabase) is running...');
+// Serve frontend
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 // Port Configuration

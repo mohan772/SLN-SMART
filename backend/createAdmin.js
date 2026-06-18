@@ -1,8 +1,9 @@
 const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
-const supabase = require('./config/supabase');
 
 dotenv.config({ path: './.env' });
+
+const supabase = require('./config/supabase');
 
 const setupAdmin = async () => {
   try {

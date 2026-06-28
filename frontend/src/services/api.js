@@ -6,9 +6,20 @@ const normalizeIds = (value) => {
   }
 
   if (value && typeof value === 'object') {
+    if (value instanceof Date || value instanceof RegExp) {
+      return value
+    }
     const normalized = {}
     for (const key of Object.keys(value)) {
-      normalized[key] = normalizeIds(value[key])
+      const normalizedVal = normalizeIds(value[key])
+      // Preserve original key
+      normalized[key] = normalizedVal
+      
+      // Convert snake_case key to camelCase
+      const camelKey = key.replace(/_([a-z0-9])/g, (g) => g[1].toUpperCase())
+      if (camelKey !== key) {
+        normalized[camelKey] = normalizedVal
+      }
     }
     if (value.id !== undefined && value._id === undefined) {
       normalized._id = value.id

@@ -34,7 +34,11 @@ app.use((req, res, next) => {
 });
 
 // Security Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
 
 // Middleware
 app.use(cors());
